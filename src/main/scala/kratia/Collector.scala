@@ -4,99 +4,25 @@ import java.util.UUID
 
 import cats.effect.{IO, Sync}
 import cats.implicits._
-import cats.{Functor, Monad, MonadError}
+import cats.{Functor, Monad}
 import kratia.state.State
 import kratia.Community._
-import kratia.Collector._
 import org.http4s.Status
 
-trait Collector[F[_]] {
+object Collector {
 
-  def address: Address
+  case class Collector[F[_]](address: Address, decision: Decision, community: Community[F], action: DecisionAction[F], store: CollectorStore[F])
 
-  def decision: Decision
+  case class CollectorStore[F[_]] private (
+    open: State[F, Boolean],
+    ballot: State[F, Ballot],
+    voted: State[F, List[(Address, ProofOfVote)]],
+  )
 
-  def community: Community[F]
-
-  def open: State[F, Boolean]
-
-  def ballot: State[F, Ballot]
-
-  def voted: State[F, List[(Membership, ProofOfVote)]]
-
-  def decisionAction: DecisionAction[F]
-
-  def vote(member: Member, vote: Vote)(implicit F: Sync[F]): F[ProofOfVote] =
-    for {
-      _ <- checkIfOpen(member)
-      _ <- checkIfVoted(member)
-      _ <- checkIfProposalMatches(vote)
-      _ <- ballot.update(_.add(member.membership, vote))
-      proof <- ProofOfVote.gen[F](member)
-      _ <- voted.update((member.membership, proof) :: _)
-    } yield proof
-
-  def validateVote(proofOfVote: ProofOfVote)(implicit F: Functor[F]): F[Boolean] =
-    voted.get.map(_.exists(_._2 == proofOfVote))
-
-  def close(implicit F: Monad[F]): F[Unit] =
-    for {
-      _ <- open.set(false)
-      b <- ballot.get
-      _ <- community.reportDecision(address, decision, b)
-    } yield ()
-
-  private def checkIfOpen(member: Member)(implicit F: MonadError[F, Throwable]): F[Unit] =
-    open.get >>= (o => if(o) F.unit else F.raiseError(BallotAlreadyClosed(member)))
-
-  private def checkIfVoted(member: Member)(implicit F: MonadError[F, Throwable]): F[Unit] =
-    voted.get map
-      (_.exists(_._1 == member.membership)) >>=
-      (voted => if(voted) F.raiseError(MemberAlreadyVoted(member)) else F.unit)
-
-  private def checkIfProposalMatches(vote: Vote)(implicit F: MonadError[F, Throwable]): F[Unit] =
-    if(vote.proposal == decision.decisionType) F.unit else F.raiseError(VoteMustBeOfSameProposal)
-}
-
-object Collector extends CollectorTypes with CollectorFailures {
-
-  def inMem(dec: Decision, com: Community[IO], act: DecisionAction[IO]): IO[Collector[IO]] =
-    for {
-      openState <- State.ref[Boolean](false)
-      ballotState <- State.ref[Ballot](Ballot(Map.empty))
-      votedState <- State.ref[List[(Membership, ProofOfVote)]](List.empty)
-      addr <- Address.gen[IO]
-    } yield new Collector[IO] {
-      override val address: Address = addr
-      override val decision: Decision = dec
-      override val community: Community[IO] = com
-      override val decisionAction: DecisionAction[IO] = act
-      override def open: State[IO, Boolean] = openState
-      override def ballot: State[IO, Ballot] = ballotState
-      override def voted: State[IO, List[(Membership, ProofOfVote)]] = votedState
-    }
-}
-
-private[kratia] trait CollectorTypes {
-
-  case class Address(value: UUID)
-  object Address {
-    def gen[F[_]](implicit sync: Sync[F]): F[Address] = sync.delay(Address(UUID.randomUUID()))
-  }
-
-  case class Ballot(value: Map[Membership, Vote]) {
-    def add(membership: Membership, vote: Vote): Ballot =
-      Ballot(value + (membership -> vote))
-  }
+  case class Ballot(value: Map[Address, Vote]) extends AnyVal
 
   case class ProofOfVote(id: UUID, nickname: String)
-  object ProofOfVote {
-    def gen[F[_]](member: Member)(implicit F: Sync[F]): F[ProofOfVote] =
-      F.delay(ProofOfVote(UUID.randomUUID(), member.nickname))
-  }
-}
 
-private[kratia] trait CollectorFailures { self: CollectorTypes =>
 
   case class CollectorNotFound(address: Address) extends RuntimeException with KratiaFailure {
     val code: Status = Status.NotFound
@@ -117,4 +43,56 @@ private[kratia] trait CollectorFailures { self: CollectorTypes =>
     override def code: Status = Status.BadRequest
     override def message: String = s"Not a valid proposal type, the vote must match the decision proposal type."
   }
+
+
+  def CollectorInMem(decision: Decision, community: Community[IO], action: DecisionAction[IO]): IO[Collector[IO]] =
+    for {
+      openState <- State.ref[Boolean](false)
+      ballotState <- State.ref[Ballot](Ballot(Map.empty))
+      votedState <- State.ref[List[(Address, ProofOfVote)]](List.empty)
+      address <- genAddress[IO]
+    } yield Collector[IO](address, decision, community, action, CollectorStore(openState, ballotState, votedState))
+
+  def vote[F[_]](member: Member, vote: Vote)(collector: Collector[F])(implicit F: Sync[F]): F[ProofOfVote] =
+    for {
+      _ <- checkIfOpen(member)(collector) >>= checkIfVoted(member) >>= checkIfProposalMatches(vote)
+      _ <- collector.store.ballot.update(addToBallot(member.address, vote))
+      proof <- genProof[F](member)
+      _ <- collector.store.voted.update((member.address, proof) :: _)
+    } yield proof
+
+  def validateVote[F[_]](proofOfVote: ProofOfVote)(collector: Collector[F])(implicit F: Functor[F]): F[Boolean] =
+    collector.store.voted.get.map(_.exists(_._2 == proofOfVote))
+
+  def close[F[_]](collector: Collector[F])(implicit F: Monad[F]): F[Unit] =
+    for {
+      _ <- collector.store.open.set(false)
+      _ <- Community.reportDecision(collector)(collector.community)
+    } yield ()
+
+  private def checkIfOpen[F[_]](member: Member)(collector: Collector[F])(implicit F: Sync[F]): F[Collector[F]] =
+    collector.store.open.get >>= { isOpen =>
+      if (isOpen) collector.pure[F]
+      else F.raiseError(BallotAlreadyClosed(member))
+    }
+
+  private def checkIfVoted[F[_]](member: Member)(collector: Collector[F])(implicit F: Sync[F]): F[Collector[F]] =
+    collector.store.voted.get map
+      { _.exists(_._1 == member.address) } >>= { voted =>
+        if (voted) F.raiseError(MemberAlreadyVoted(member))
+        else collector.pure[F]
+      }
+
+  private def checkIfProposalMatches[F[_]](vote: Vote)(collector: Collector[F])(implicit F: Sync[F]): F[Collector[F]] =
+    if(vote.decisionType == collector.decision.decisionType) collector.pure[F]
+    else F.raiseError(VoteMustBeOfSameProposal)
+
+  private def genAddress[F[_]](implicit sync: Sync[F]): F[Address] =
+    sync.delay(Address(UUID.randomUUID()))
+
+  private def genProof[F[_]](member: Member)(implicit F: Sync[F]): F[ProofOfVote] =
+    F.delay(ProofOfVote(UUID.randomUUID(), member.nickname))
+
+  private def addToBallot(address: Address, vote: Vote)(ballot: Ballot): Ballot =
+    Ballot(ballot.value + (address -> vote))
 }
