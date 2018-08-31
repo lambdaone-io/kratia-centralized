@@ -4,7 +4,7 @@ import java.util.UUID
 
 import cats.effect.{IO, Sync}
 import cats.implicits._
-import cats.{Functor, Monad}
+import cats.Functor
 import kratia.state.State
 import kratia.Community._
 import org.http4s.Status
@@ -64,7 +64,7 @@ object Collector {
   def validateVote[F[_]](proofOfVote: ProofOfVote)(collector: Collector[F])(implicit F: Functor[F]): F[Boolean] =
     collector.store.voted.get.map(_.exists(_._2 == proofOfVote))
 
-  def close[F[_]](collector: Collector[F])(implicit F: Monad[F]): F[Unit] =
+  def close[F[_]](collector: Collector[F])(implicit F: Sync[F]): F[Unit] =
     for {
       _ <- collector.store.open.set(false)
       _ <- Community.reportDecision(collector)(collector.community)

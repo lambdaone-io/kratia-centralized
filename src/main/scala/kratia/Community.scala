@@ -2,12 +2,11 @@ package kratia
 
 import java.util.UUID
 
-import cats.Applicative
+import cats.Monoid
 import cats.implicits._
 import cats.effect.Sync
 import fs2.async.mutable.Topic
 import kratia.state.{State, Store}
-import kratia.utils.CaseEnum
 import kratia.Collector._
 import org.http4s.Status
 
@@ -44,9 +43,19 @@ object Community {
 
   case class Secret(value: UUID) extends AnyVal
 
+  case class Decision(decisionType: DecisionType, description: String, domain: String)
+
   case class Influence(value: Long) extends AnyVal
 
-  case class Decision(decisionType: DecisionType, description: String, domain: String)
+  object Influence {
+
+    implicit object InfluenceMonoid extends Monoid[Influence] {
+
+      override def empty: Influence = Influence(0l)
+
+      override def combine(x: Influence, y: Influence): Influence = Influence(x.value + y.value)
+    }
+  }
 
   sealed abstract class DecisionRequest(val decisionType: DecisionType) {
 
@@ -95,54 +104,32 @@ object Community {
 
     case object Majority extends DecisionResolutionType("majority")
 
+    /*
     case object LowInertia extends DecisionResolutionType("low_inertia")
 
     case object AtLeastOne extends DecisionResolutionType("at_least_one")
 
     case object Unanimous extends DecisionResolutionType("anonimous")
-
-    implicit object EnumInstance extends CaseEnum[DecisionResolutionType] {
-
-      override def show(a: DecisionResolutionType): String = a.name
-
-      override def lift(s: String): Option[DecisionResolutionType] = all.find(_.name.equalsIgnoreCase(s))
-
-      override def default: DecisionResolutionType = Majority
-
-      override def all: Set[DecisionResolutionType] = Set(
-        Majority, LowInertia, AtLeastOne, Unanimous
-      )
-    }
+    */
   }
 
   sealed abstract class InfluenceDistributionType(val name: String)
 
   object InfluenceDistributionType {
 
-    case object Autocratic extends InfluenceDistributionType("autocratic")
+    case object Democratic extends InfluenceDistributionType("democratic")
 
+    case class Autocratic(control: Address) extends InfluenceDistributionType("autocratic")
+
+    /*
     case object Oligarchic extends InfluenceDistributionType("oligarchic")
 
     case object Meritocratic extends InfluenceDistributionType("meritocratic")
 
-    case object Democratic extends InfluenceDistributionType("democratic")
-
     case object TemporalDegradation extends InfluenceDistributionType("temporal_degradation")
 
     case object GeolocationBased extends InfluenceDistributionType("geolocation_based")
-
-    implicit object EnumInstance extends CaseEnum[InfluenceDistributionType] {
-
-      override def show(a: InfluenceDistributionType): String = a.name
-
-      override def lift(s: String): Option[InfluenceDistributionType] = all.find(_.name.equalsIgnoreCase(s))
-
-      override def default: InfluenceDistributionType = Democratic
-
-      override def all: Set[InfluenceDistributionType] = Set(
-        Autocratic, Oligarchic, Meritocratic, Democratic, TemporalDegradation
-      )
-    }
+    */
   }
 
 
@@ -179,7 +166,7 @@ object Community {
 
   def vote[F[_]](sender: Member, address: Address, vote: Vote)(community: Community[F])(implicit F: Sync[F]): F[ProofOfVote] =
     for {
-      _ <- authorize(sender)
+      _ <- authorize(sender)(community)
       collector <- community.store.active.get(address.value)(CollectorNotFound(address))
       proof <- Collector.vote(sender, vote)(collector.model)
       _ <- community.events.publish1(CommunityEvents.Voted(vote, collector.model.decision))
@@ -194,7 +181,7 @@ object Community {
     for {
       ballot <- collector.store.ballot.get
       (decision, address, action) = (collector.decision, collector.address, collector.action)
-      result <- resolve(decision, ballot)
+      result <- resolve(decision, ballot)(community)
       _ <- action(community, result)
       _ <- community.events.publish1(CommunityEvents.Resolved(address, decision, result))
     } yield ()
@@ -204,15 +191,37 @@ object Community {
 
   private def resolve[F[_]](decision: Decision, ballot: Ballot)(community: Community[F])(implicit F: Sync[F]): F[Vote] =
     for {
-      allocationType <- community.store.allocation.get map (_(decision.decisionType))
-      resolutionType <- community.store.resolution.get map (_(decision.decisionType))
+      allocationType <- community.store.allocation.get.map(_(decision.decisionType))
+      resolutionType <- community.store.resolution.get.map(_(decision.decisionType))
       buckets <- influenceBuckets(ballot, allocationType)
       vote <- resolveVote(buckets, resolutionType)
     } yield vote
 
-  private def influenceBuckets[F[_]](ballot: Ballot, allocationType: InfluenceDistributionType): F[Map[Vote, Influence]] = ???
+  private def influenceBuckets[F[_]](ballot: Ballot, allocationType: InfluenceDistributionType)(implicit F: Sync[F]): F[Map[Vote, Influence]] = {
 
-  private def resolveVote[F[_]](buckets: Map[Vote, Influence], resolutionType: DecisionResolutionType): F[Vote] = ???
+    def boxInfluenceBuckets(buckets: List[(Vote, Influence)]): F[Map[Vote, Influence]] =
+      buckets.groupBy(_._1).mapValues(_.foldLeft(Influence(0l))(_ |+| _._2)).pure[F]
+
+    boxInfluenceBuckets(allocationType match {
+      case InfluenceDistributionType.Autocratic(control) =>
+        ballot.value.toList.map {
+          case (member, vote) if member == control => (vote, Influence(1l))
+          case (_, vote) => (vote, Influence(0l))
+        }
+      case InfluenceDistributionType.Democratic =>
+        ballot.value.toList.map {
+          case (_, vote) => (vote, Influence(1l))
+        }
+    })
+  }
+
+  private def resolveVote[F[_]](buckets: Map[Vote, Influence], resolutionType: DecisionResolutionType)(implicit F: Sync[F]): F[Vote] =
+    resolutionType match {
+      case DecisionResolutionType.Majority =>
+        buckets.foldLeft((null.asInstanceOf[Vote], Influence(0l))) { (winning, x) =>
+          if(x._2.value > winning._2.value) x else winning
+        }._1.pure[F]
+    }
 
   private def resolveAction[F[_]](decision: DecisionRequest)(implicit F: Sync[F]): DecisionAction[F] =
     (community, vote) => (decision, vote) match {
