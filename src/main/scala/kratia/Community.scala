@@ -15,12 +15,12 @@ trait Community[F[_]] {
 
   protected def createDecision(decision: Decision): F[Address]
 
-  def decide(sender: Member, decision: Decision): F[Address]
-
   def getName: F[String] = name.get
 
   def validateMember(member: Member, membership: Membership): F[Boolean] =
     members.exists((member, membership))
+
+  def decide(sender: Member, decision: Decision): F[Address]
 
   def reportDecision(address: Address, decision: Decision, ballot: Ballot): F[Unit]
 }

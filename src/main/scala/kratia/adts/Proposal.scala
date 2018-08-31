@@ -1,17 +1,21 @@
 package kratia.adts
 
-sealed abstract class Proposal(val typeName: String)
+sealed abstract class Proposal(val typeName: String) {
+
+  type VoteType <: Vote
+}
+
+sealed abstract class Vote(val typeName: String)
 
 object Proposal {
 
-  sealed abstract class Binary(val name: String) extends Proposal("binary")
+  /** Decision System Change */
+  case class DSCVote(distribution: InfluenceDistributionType, resolution: DecisionResolutionType) extends Vote("decision_system_change_vote")
 
-  object Binary {
+  case object DecisionSystemChange extends Proposal("decision_system_change") { type VoteType = DSCVote }
 
-    case object Yes extends Binary("yes")
+  /** Add member */
+  case class AddMemberVote(vote: Boolean) extends Vote("add_member_vote")
 
-    case object No extends Binary("yes")
-  }
-
-  case object RequestForProposal extends Proposal("request_for_proposal")
+  case object AddMember extends Proposal("add_member") { type VoteType = AddMemberVote }
 }

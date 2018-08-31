@@ -1,7 +1,6 @@
 package kratia.utils
 
-import io.circe.Json.JString
-import io.circe.{Decoder, Encoder, Json}
+import io.circe.{Decoder, Encoder}
 import io.circe.DecodingFailure
 
 trait Enum[A] {
@@ -24,14 +23,14 @@ object Enum {
   object implicits {
 
     implicit def EnumEncoder[A](implicit enum: Enum[A]): Encoder[A] =
-      a => JString(enum.show(a))
+      a => Encoder.encodeString(enum.show(a))
 
     implicit def EnumDecoder[A](implicit enum: Enum[A]): Decoder[A] =
       hcursor => for {
         string <- hcursor.as[String]
         en <- enum.lift(string) match {
           case Some(en) => Right(en)
-          case None => DecodingFailure(enum.notOneOf(string), hcursor.history)
+          case None => Left(DecodingFailure(enum.notOneOf(string), hcursor.history))
         }
       } yield en
   }

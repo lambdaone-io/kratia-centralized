@@ -1,3 +1,3 @@
 package kratia.adts
 
-case class Resolution[P](value: Ballot[P] => P) extends AnyVal
+case class Resolution[R](value: Ballot => R) extends AnyVal

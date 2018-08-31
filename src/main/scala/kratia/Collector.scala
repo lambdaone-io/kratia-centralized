@@ -1,5 +1,6 @@
 package kratia
 
+import cats.effect.Sync
 import cats.implicits._
 import cats.{Functor, Monad}
 import kratia.adts._
@@ -9,7 +10,7 @@ trait Collector[F[_]] {
 
   def address: Address
 
-  def decision: Decision
+  val decision: Decision
 
   def open: State[F, Boolean]
 
@@ -19,7 +20,7 @@ trait Collector[F[_]] {
 
   def community: Community[F]
 
-  def vote(member: Member, membership: Membership, proposal: Proposal)(implicit F: Monad[F]): F[Option[ProofOfVote]] =
+  def vote(member: Member, membership: Membership, vote: decision.proposal.VoteType)(implicit F: Sync[F]): F[Option[ProofOfVote]] =
     for {
       isInCommunity <- community.validateMember(member, membership)
       isOpen <- open.get
@@ -27,7 +28,7 @@ trait Collector[F[_]] {
       optProof <- {
         if(isInCommunity && isOpen && !alreadyVoted)
           for {
-            _ <- ballot.update(_.add(membership, proposal))
+            _ <- ballot.update(_.add(membership, vote))
             proof <- ProofOfVote.gen[F](member)
             _ <- voted.update((membership, proof) :: _)
           } yield Some(proof)
