@@ -3,13 +3,19 @@ package kratia.state
 import java.util.UUID
 
 import cats.implicits._
-import cats.{Functor, Monad}
+import cats.{Functor, Monad, MonadError}
 
 trait Store[F[_], A] {
 
   def create(a: A): F[Ins[A]]
 
   def read(id: UUID): F[Option[Ins[A]]]
+
+  def get(id: UUID)(e: => Throwable)(implicit F: MonadError[F, Throwable]): F[Ins[A]] =
+    read(id) >>= {
+      case None => F.raiseError(e)
+      case Some(a) => F.pure(a)
+    }
 
   def update(id: UUID)(f: A => A): F[Option[Ins[A]]]
 

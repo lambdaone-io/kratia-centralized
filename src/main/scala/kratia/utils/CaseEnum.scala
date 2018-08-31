@@ -3,7 +3,7 @@ package kratia.utils
 import io.circe.{Decoder, Encoder}
 import io.circe.DecodingFailure
 
-trait Enum[A] {
+trait CaseEnum[A] {
 
   def show(a: A): String
 
@@ -18,14 +18,14 @@ trait Enum[A] {
   def notOneOf(s: String): String = s"'$s' was not part of enum: (${all.mkString(" | ")})"
 }
 
-object Enum {
+object CaseEnum {
 
   object implicits {
 
-    implicit def EnumEncoder[A](implicit enum: Enum[A]): Encoder[A] =
+    implicit def EnumEncoder[A](implicit enum: CaseEnum[A]): Encoder[A] =
       a => Encoder.encodeString(enum.show(a))
 
-    implicit def EnumDecoder[A](implicit enum: Enum[A]): Decoder[A] =
+    implicit def EnumDecoder[A](implicit enum: CaseEnum[A]): Decoder[A] =
       hcursor => for {
         string <- hcursor.as[String]
         en <- enum.lift(string) match {
