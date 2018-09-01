@@ -2,11 +2,13 @@ package kratia
 
 import fs2.Stream
 import cats.implicits._
-import cats.effect.{ConcurrentEffect, Timer}
-import org.http4s.Status
+import cats.effect.{Concurrent, ConcurrentEffect, Timer}
+import org.http4s.implicits._
+import org.http4s.{HttpRoutes, StaticFile, Status}
 import kratia.kratia_member._
 import kratia.kratia_community._
 import kratia.kratia_configuration._
+import org.http4s.dsl.Http4sDsl
 
 import scala.concurrent.duration._
 
@@ -36,9 +38,30 @@ object kratia_app {
       communities <- CommunitiesInMem[F]
     } yield Kratia[F](members, communities, timeStream[F](config))
 
+  def KratiaStaticFiles[F[_]](kratia: Kratia[F], dsl: Http4sDsl[F])(implicit F: Concurrent[F]): HttpRoutes[F] = {
+    import dsl._
+    HttpRoutes.of[F] {
+
+      case request @ GET -> Root =>
+        StaticFile.fromResource("/static/index.html", Some(request)).getOrElseF(NotFound())
+
+      case request @ GET -> "static" /: path =>
+        StaticFile.fromResource("/static" + path.toString, Some(request)).getOrElseF(NotFound())
+    }
+  }
+
+  def KratiaAPI[F[_]](kratia: Kratia[F], dsl: Http4sDsl[F])(implicit F: Concurrent[F]): HttpRoutes[F] = {
+    import dsl._
+    HttpRoutes.of[F] {
+
+      case request @ GET -> Root =>
+        Ok("pong")
+    }
+  }
+
   private def timeStream[F[_]](config: KratiaConfig)(implicit timer: Timer[F]): Stream[F, Time] =
     Stream
       .fixedRate(config.appSpeed)
-      .evalMap(_ => timer.clock.monotonic(MILLISECONDS))
+      .evalMap(_ => timer.clockMonotonic(MILLISECONDS))
       .map(Time)
 }

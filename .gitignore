@@ -1,3 +1,6 @@
+
+src/main/resources/static/
+
 ### Scala template
 *.class
 *.log

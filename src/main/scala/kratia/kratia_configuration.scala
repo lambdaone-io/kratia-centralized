@@ -19,7 +19,7 @@ object kratia_configuration {
     F.delay {
       val config: Config = ConfigFactory.load()
       KratiaConfig(
-        FiniteDuration(config.getDuration("kratia.app-speed").toMillis, "MILLISECONDS")
+        FiniteDuration(config.getDuration("kratia.app-speed").toMillis, "millisecond")
       )
     }
 }
