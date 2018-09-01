@@ -7,9 +7,15 @@ import cats.implicits._
 import cats.Functor
 import kratia.state.State
 import kratia.Community._
+import kratia.Member.Member
+import kratia.utils.Utils
+import kratia.utils.Utils.Address
 import org.http4s.Status
 
 object Collector {
+
+
+  /** Models */
 
   case class Collector[F[_]](address: Address, decision: Decision, community: Community[F], action: DecisionAction[F], store: CollectorStore[F])
 
@@ -23,6 +29,8 @@ object Collector {
 
   case class ProofOfVote(id: UUID, nickname: String)
 
+
+  /** Failures */
 
   case class CollectorNotFound(address: Address) extends RuntimeException with KratiaFailure {
     val code: Status = Status.NotFound
@@ -45,12 +53,14 @@ object Collector {
   }
 
 
+  /** Functions */
+
   def CollectorInMem(decision: Decision, community: Community[IO], action: DecisionAction[IO]): IO[Collector[IO]] =
     for {
       openState <- State.ref[Boolean](false)
       ballotState <- State.ref[Ballot](Ballot(Map.empty))
       votedState <- State.ref[List[(Address, ProofOfVote)]](List.empty)
-      address <- genAddress[IO]
+      address <- Utils.genAddress[IO]
     } yield Collector[IO](address, decision, community, action, CollectorStore(openState, ballotState, votedState))
 
   def vote[F[_]](member: Member, vote: Vote)(collector: Collector[F])(implicit F: Sync[F]): F[ProofOfVote] =
@@ -86,9 +96,6 @@ object Collector {
   private def checkIfProposalMatches[F[_]](vote: Vote)(collector: Collector[F])(implicit F: Sync[F]): F[Collector[F]] =
     if(vote.decisionType == collector.decision.decisionType) collector.pure[F]
     else F.raiseError(VoteMustBeOfSameProposal)
-
-  private def genAddress[F[_]](implicit sync: Sync[F]): F[Address] =
-    sync.delay(Address(UUID.randomUUID()))
 
   private def genProof[F[_]](member: Member)(implicit F: Sync[F]): F[ProofOfVote] =
     F.delay(ProofOfVote(UUID.randomUUID(), member.nickname))

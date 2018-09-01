@@ -21,7 +21,12 @@ trait Store[F[_], A] {
 
   def delete(id: UUID): F[Option[Ins[A]]]
 
+  def all: F[List[A]]
+
   def exists(a: A): F[Boolean]
+
+  def filter(f: A => Boolean)(implicit F: Functor[F]): F[List[A]] =
+    all.map(_.filter(f))
 
   def set(id: UUID)(newValue: A): F[Option[Ins[A]]] =
     update(id)(_ => newValue)
@@ -32,7 +37,7 @@ trait Store[F[_], A] {
 
 object Store {
 
-  def fromState[F[_], A](state: State[F, Map[UUID, A]])(implicit F: Monad[F]): Store[F, A] =
+  def StoreFromState[F[_], A](state: State[F, Map[UUID, A]])(implicit F: Monad[F]): Store[F, A] =
     new Store[F, A] {
 
       override def create(a: A): F[Ins[A]] = {
@@ -59,6 +64,9 @@ object Store {
           case None =>
             F.pure(None)
         }
+
+      override def all: F[List[A]] =
+        state.get.map(_.values.toList)
 
       override def exists(a: A): F[Boolean] =
         state.get.map(_.exists(_._2 == a))

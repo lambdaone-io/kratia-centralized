@@ -2,18 +2,23 @@ package kratia
 
 import java.util.UUID
 
-import cats.Monoid
+import cats.{Functor, Monad, Monoid}
 import cats.implicits._
 import cats.effect.Sync
 import fs2.async.mutable.Topic
 import kratia.state.{State, Store}
 import kratia.Collector._
+import kratia.Member.Member
+import kratia.utils.Utils
+import kratia.utils.Utils.Address
 import org.http4s.Status
 
 object Community {
 
 
   /** Models */
+
+  case class CommunityGlobal[F[_]](community: Store[F, Community[F]])
 
   case class Community[F[_]](
     address: Address,
@@ -36,12 +41,6 @@ object Community {
   )
 
   type DecisionAction[F[_]] = (Community[F], Vote) => F[Unit]
-
-  case class Address(value: UUID) extends AnyVal
-
-  case class Member(address: Address, nickname: String, reputation: Int, secret: Secret)
-
-  case class Secret(value: UUID) extends AnyVal
 
   case class Decision(decisionType: DecisionType, description: String, domain: String)
 
@@ -163,6 +162,19 @@ object Community {
 
 
   /** Functions */
+
+  def CommunityInMem[F[_]](name: String)(global: CommunityGlobal[F])(implicit F: Monad[F]): F[Community[F]] =
+    for {
+      address <- Utils.genAddress[F]
+      membersState <- State.StateInMem[F, Map[UUID, Address]](Map.empty)
+      membersStore = Store.StoreFromState(membersState)
+      activeState <- State.StateInMem[F, Map[UUID, Collector[F]]](Map.empty)
+      activeStore = Store.StoreFromState(activeState)
+      allocationState <- State.StateInMem[F, Map[DecisionType, InfluenceDistributionType]](Map.empty)
+      resolutionState <- State.StateInMem[F, Map[DecisionType, DecisionResolutionType]](Map.empty)
+      store = CommunityStore(membersStore, activeStore, allocationState, resolutionState)
+      community <- global.community.create(Community(address, name, "root", store))
+    } yield community.model
 
   def vote[F[_]](sender: Member, address: Address, vote: Vote)(community: Community[F])(implicit F: Sync[F]): F[ProofOfVote] =
     for {

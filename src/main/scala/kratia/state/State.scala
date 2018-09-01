@@ -1,6 +1,7 @@
 package kratia.state
 
-import cats.effect.IO
+import cats.implicits._
+import cats.effect.Sync
 import cats.effect.concurrent.Ref
 
 trait State[F[_], A] {
@@ -16,20 +17,20 @@ trait State[F[_], A] {
 
 object State {
 
-  def ref[A](a: A): IO[State[IO, A]] =
-    Ref.of[IO, A](a).map { ref =>
-      new State[IO, A] {
+  def StateInMem[F[_], A](a: A)(implicit F: Sync[F]): F[State[F, A]] =
+    Ref.of[F, A](a).map { ref =>
+      new State[F, A] {
 
-        override def get: IO[A] =
+        override def get: F[A] =
           ref.get
 
-        override def modify[B](f: A => (A, B)): IO[B] =
+        override def modify[B](f: A => (A, B)): F[B] =
           ref.modify(f)
 
-        override def set(a: A): IO[Unit] =
+        override def set(a: A): F[Unit] =
           ref.set(a)
 
-        override def update(f: A => A): IO[Unit] =
+        override def update(f: A => A): F[Unit] =
           ref.update(f)
       }
     }
