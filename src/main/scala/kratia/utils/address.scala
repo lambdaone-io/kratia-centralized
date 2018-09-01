@@ -4,7 +4,7 @@ import java.util.UUID
 
 import cats.effect.Sync
 
-object Utils {
+object address {
 
   case class Address(value: UUID) extends AnyVal
 

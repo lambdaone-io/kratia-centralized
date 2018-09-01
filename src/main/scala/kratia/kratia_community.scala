@@ -2,23 +2,25 @@ package kratia
 
 import java.util.UUID
 
-import cats.{Functor, Monad, Monoid}
+import cats.Monoid
 import cats.implicits._
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
 import fs2.async.mutable.Topic
 import kratia.state.{State, Store}
-import kratia.Collector._
-import kratia.Member.Member
-import kratia.utils.Utils
-import kratia.utils.Utils.Address
+import kratia.kratia_collector.{vote => collectorVote, _}
+import kratia.kratia_community.CommunityEvents.CommunityCreated
+import kratia.kratia_app.KratiaFailure
+import kratia.kratia_member.Member
+import kratia.utils.address
+import kratia.utils.address.Address
 import org.http4s.Status
 
-object Community {
+object kratia_community {
 
 
   /** Models */
 
-  case class CommunityGlobal[F[_]](community: Store[F, Community[F]])
+  case class Communities[F[_]](communities: Store[F, Community[F]])
 
   case class Community[F[_]](
     address: Address,
@@ -138,6 +140,8 @@ object Community {
 
   object CommunityEvents {
 
+    case class CommunityCreated(name: String) extends CommunityEvents
+
     case class Voted(vote: Vote, decision: Decision) extends CommunityEvents
 
     case class Resolved(ballot: Address, decision: Decision, vote: Vote) extends CommunityEvents
@@ -163,9 +167,15 @@ object Community {
 
   /** Functions */
 
-  def CommunityInMem[F[_]](name: String)(global: CommunityGlobal[F])(implicit F: Monad[F]): F[Community[F]] =
+  def CommunitiesInMem[F[_]](implicit F: Sync[F]): F[Communities[F]] =
     for {
-      address <- Utils.genAddress[F]
+      communitiesState <- State.StateInMem[F, Map[UUID, Community[F]]](Map.empty)
+      communitiesStore = Store.StoreFromState(communitiesState)
+    } yield Communities(communitiesStore)
+
+  def CommunityInMem[F[_]](name: String)(global: Communities[F])(implicit F: Concurrent[F]): F[Community[F]] =
+    for {
+      address <- address.genAddress[F]
       membersState <- State.StateInMem[F, Map[UUID, Address]](Map.empty)
       membersStore = Store.StoreFromState(membersState)
       activeState <- State.StateInMem[F, Map[UUID, Collector[F]]](Map.empty)
@@ -173,14 +183,16 @@ object Community {
       allocationState <- State.StateInMem[F, Map[DecisionType, InfluenceDistributionType]](Map.empty)
       resolutionState <- State.StateInMem[F, Map[DecisionType, DecisionResolutionType]](Map.empty)
       store = CommunityStore(membersStore, activeStore, allocationState, resolutionState)
-      community <- global.community.create(Community(address, name, "root", store))
+      dependencies = CommunityDependencies(kratia_collector.CollectorInMem[F])
+      topic <- Topic[F, CommunityEvents](CommunityCreated(name))
+      community <- global.communities.create(Community[F](address, name, "root", topic, store, dependencies))
     } yield community.model
 
   def vote[F[_]](sender: Member, address: Address, vote: Vote)(community: Community[F])(implicit F: Sync[F]): F[ProofOfVote] =
     for {
       _ <- authorize(sender)(community)
       collector <- community.store.active.get(address.value)(CollectorNotFound(address))
-      proof <- Collector.vote(sender, vote)(collector.model)
+      proof <- collectorVote(sender, vote)(collector.model)
       _ <- community.events.publish1(CommunityEvents.Voted(vote, collector.model.decision))
     } yield proof
 

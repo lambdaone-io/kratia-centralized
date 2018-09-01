@@ -2,17 +2,17 @@ package kratia
 
 import java.util.UUID
 
-import cats.effect.{IO, Sync}
+import cats.effect.Sync
 import cats.implicits._
 import cats.Functor
 import kratia.state.State
-import kratia.Community._
-import kratia.Member.Member
-import kratia.utils.Utils
-import kratia.utils.Utils.Address
+import kratia.kratia_community._
+import kratia.kratia_app.KratiaFailure
+import kratia.kratia_member.Member
+import kratia.utils.address._
 import org.http4s.Status
 
-object Collector {
+object kratia_collector {
 
 
   /** Models */
@@ -55,13 +55,13 @@ object Collector {
 
   /** Functions */
 
-  def CollectorInMem(decision: Decision, community: Community[IO], action: DecisionAction[IO]): IO[Collector[IO]] =
+  def CollectorInMem[F[_]](decision: Decision, community: Community[F], action: DecisionAction[F])(implicit F: Sync[F]): F[Collector[F]] =
     for {
-      openState <- State.ref[Boolean](false)
-      ballotState <- State.ref[Ballot](Ballot(Map.empty))
-      votedState <- State.ref[List[(Address, ProofOfVote)]](List.empty)
-      address <- Utils.genAddress[IO]
-    } yield Collector[IO](address, decision, community, action, CollectorStore(openState, ballotState, votedState))
+      openState <- State.StateInMem[F, Boolean](false)
+      ballotState <- State.StateInMem[F, Ballot](Ballot(Map.empty))
+      votedState <- State.StateInMem[F, List[(Address, ProofOfVote)]](List.empty)
+      address <- genAddress[F]
+    } yield Collector[F](address, decision, community, action, CollectorStore(openState, ballotState, votedState))
 
   def vote[F[_]](member: Member, vote: Vote)(collector: Collector[F])(implicit F: Sync[F]): F[ProofOfVote] =
     for {
@@ -77,7 +77,7 @@ object Collector {
   def close[F[_]](collector: Collector[F])(implicit F: Sync[F]): F[Unit] =
     for {
       _ <- collector.store.open.set(false)
-      _ <- Community.reportDecision(collector)(collector.community)
+      _ <- kratia_community.reportDecision(collector)(collector.community)
     } yield ()
 
   private def checkIfOpen[F[_]](member: Member)(collector: Collector[F])(implicit F: Sync[F]): F[Collector[F]] =
