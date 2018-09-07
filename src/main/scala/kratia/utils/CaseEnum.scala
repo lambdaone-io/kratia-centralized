@@ -7,15 +7,17 @@ trait CaseEnum[A] {
 
   def show(a: A): String
 
-  def lift(s: String): Option[A]
+  def parse(s: String): Option[A]
 
   def default: A
 
-  def all: Set[A]
+  def members: Set[A]
 
-  def liftWithDefault(s: String): A = lift(s).getOrElse(default)
+  def parseOrDefault(s: String): A =
+    parse(s).getOrElse(default)
 
-  def notOneOf(s: String): String = s"'$s' was not part of enum: (${all.mkString(" | ")})"
+  def errorMessage(s: String): String =
+    s"'$s' was not part of enum: (${members.mkString(" | ")})"
 }
 
 object CaseEnum {
@@ -28,9 +30,9 @@ object CaseEnum {
     implicit def EnumDecoder[A](implicit enum: CaseEnum[A]): Decoder[A] =
       hcursor => for {
         string <- hcursor.as[String]
-        en <- enum.lift(string) match {
+        en <- enum.parse(string) match {
           case Some(en) => Right(en)
-          case None => Left(DecodingFailure(enum.notOneOf(string), hcursor.history))
+          case None => Left(DecodingFailure(enum.errorMessage(string), hcursor.history))
         }
       } yield en
   }

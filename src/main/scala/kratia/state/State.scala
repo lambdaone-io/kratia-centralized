@@ -2,7 +2,7 @@ package kratia.state
 
 import cats.implicits._
 import cats.effect.Sync
-import cats.effect.concurrent.Ref
+import fs2.async.Ref
 
 trait State[F[_], A] {
 
@@ -10,28 +10,28 @@ trait State[F[_], A] {
 
   def modify[B](f: A => (A, B)): F[B]
 
-  def set(a: A): F[Unit]
+  def set(a: A): F[A]
 
-  def update(f: A => A): F[Unit]
+  def update(f: A => A): F[A]
 }
 
 object State {
 
   def StateInMem[F[_], A](a: A)(implicit F: Sync[F]): F[State[F, A]] =
-    Ref.of[F, A](a).map { ref =>
+    Ref[F, A](a).map { ref =>
       new State[F, A] {
 
         override def get: F[A] =
           ref.get
 
         override def modify[B](f: A => (A, B)): F[B] =
-          ref.modify(f)
+          ref.modify2(f).map(_._2)
 
-        override def set(a: A): F[Unit] =
-          ref.set(a)
+        override def set(a: A): F[A] =
+          ref.modify(_ => a).map(_.now)
 
-        override def update(f: A => A): F[Unit] =
-          ref.update(f)
+        override def update(f: A => A): F[A] =
+          ref.modify(f).map(_.now)
       }
     }
 }

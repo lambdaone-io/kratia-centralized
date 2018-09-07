@@ -7,8 +7,8 @@ import cats.effect.Sync
 import kratia.state.State
 import kratia.kratia_app.KratiaFailure
 import kratia.state.Store
-import kratia.utils.address
-import kratia.utils.address.Address
+import kratia.utils.Address
+import kratia.utils.Address.genAddress
 import org.http4s.Status
 
 object kratia_member {
@@ -39,9 +39,9 @@ object kratia_member {
       membersStore = Store.StoreFromState(membersState)
     } yield Members(membersStore)
 
-  def MemberInMem[F[_]](nickname: String, store: Members[F])(implicit F: Sync[F]): F[Member] =
+  def MemberInMem[F[_]](nickname: String)(store: Members[F])(implicit F: Sync[F]): F[Member] =
     for {
-      address <- address.genAddress
+      address <- genAddress
       secret <- genSecret
       member: Member = Member(address, nickname, 0, secret)
       _ <- store.members.create(member)

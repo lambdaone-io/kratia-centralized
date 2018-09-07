@@ -7,19 +7,19 @@ import cats.{Functor, Monad, MonadError}
 
 trait Store[F[_], A] {
 
-  def create(a: A): F[Ins[A]]
+  def create(a: A): F[Instance[A]]
 
-  def read(id: UUID): F[Option[Ins[A]]]
+  def read(id: UUID): F[Option[Instance[A]]]
 
-  def get(id: UUID)(e: => Throwable)(implicit F: MonadError[F, Throwable]): F[Ins[A]] =
+  def get(id: UUID)(e: => Throwable)(implicit F: MonadError[F, Throwable]): F[Instance[A]] =
     read(id) >>= {
       case None => F.raiseError(e)
       case Some(a) => F.pure(a)
     }
 
-  def update(id: UUID)(f: A => A): F[Option[Ins[A]]]
+  def update(id: UUID)(f: A => A): F[Option[Instance[A]]]
 
-  def delete(id: UUID): F[Option[Ins[A]]]
+  def delete(id: UUID): F[Option[Instance[A]]]
 
   def all: F[List[A]]
 
@@ -28,7 +28,7 @@ trait Store[F[_], A] {
   def filter(f: A => Boolean)(implicit F: Functor[F]): F[List[A]] =
     all.map(_.filter(f))
 
-  def set(id: UUID)(newValue: A): F[Option[Ins[A]]] =
+  def set(id: UUID)(newValue: A): F[Option[Instance[A]]] =
     update(id)(_ => newValue)
 
   def delete_(id: UUID)(implicit F: Functor[F]): F[Unit] =
@@ -40,24 +40,24 @@ object Store {
   def StoreFromState[F[_], A](state: State[F, Map[UUID, A]])(implicit F: Monad[F]): Store[F, A] =
     new Store[F, A] {
 
-      override def create(a: A): F[Ins[A]] = {
+      override def create(a: A): F[Instance[A]] = {
         val id = UUID.randomUUID()
-        state.update(_ + (id -> a)) *> F.pure(Ins(id, a))
+        state.update(_ + (id -> a)) *> F.pure(Instance(id, a))
       }
 
-      override def read(id: UUID): F[Option[Ins[A]]] =
-        state.get.map(_.get(id).map(Ins(id, _)))
+      override def read(id: UUID): F[Option[Instance[A]]] =
+        state.get.map(_.get(id).map(Instance(id, _)))
 
-      override def update(id: UUID)(f: A => A): F[Option[Ins[A]]] =
+      override def update(id: UUID)(f: A => A): F[Option[Instance[A]]] =
         read(id) >>= {
           case Some(a) =>
             val updated = f(a.model)
-            state.update(_ + (id -> updated)) *> F.pure(Some(Ins(id, updated)))
+            state.update(_ + (id -> updated)) *> F.pure(Some(Instance(id, updated)))
           case None =>
             F.pure(None)
         }
 
-      override def delete(id: UUID): F[Option[Ins[A]]] =
+      override def delete(id: UUID): F[Option[Instance[A]]] =
         read(id) >>= {
           case Some(a) =>
             state.update(_ - id) *> F.pure(Some(a))

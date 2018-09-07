@@ -2,12 +2,12 @@ package kratia
 
 import fs2.Stream
 import cats.implicits._
-import cats.effect.{Concurrent, ConcurrentEffect, Timer}
-import org.http4s.implicits._
-import org.http4s.{HttpRoutes, StaticFile, Status}
+import cats.effect.{Concurrent, ConcurrentEffect, Sync, Timer}
+import org.http4s.{HttpService, StaticFile, Status}
 import kratia.kratia_member._
 import kratia.kratia_community._
 import kratia.kratia_configuration._
+import kratia.utils.Log
 import org.http4s.dsl.Http4sDsl
 
 import scala.concurrent.duration._
@@ -17,7 +17,12 @@ object kratia_app {
 
   /** Models  */
 
-  case class Kratia[F[_]](members: Members[F], communities: Communities[F], timeStream: Stream[F, Time])
+  case class Kratia[F[_]](
+    members: Members[F],
+    communities: Communities[F],
+    timeStream: Stream[F, Time],
+    apiLogger: Log[F]
+  )
 
   trait KratiaFailure extends Throwable {
 
@@ -36,11 +41,17 @@ object kratia_app {
       config <- loadConfig[F]
       members <- MembersInMem[F]
       communities <- CommunitiesInMem[F]
-    } yield Kratia[F](members, communities, timeStream[F](config))
+      apiLogger = Log.colorPrint[F]
+    } yield Kratia[F](
+      members,
+      communities,
+      timeStream[F](config),
+      apiLogger
+    )
 
-  def KratiaStaticFiles[F[_]](kratia: Kratia[F], dsl: Http4sDsl[F])(implicit F: Concurrent[F]): HttpRoutes[F] = {
+  def KratiaStaticFiles[F[_]](kratia: Kratia[F], dsl: Http4sDsl[F])(implicit F: Concurrent[F]): HttpService[F] = {
     import dsl._
-    HttpRoutes.of[F] {
+    HttpService[F] {
 
       case request @ GET -> Root =>
         StaticFile.fromResource("/static/index.html", Some(request)).getOrElseF(NotFound())
@@ -50,18 +61,21 @@ object kratia_app {
     }
   }
 
-  def KratiaAPI[F[_]](kratia: Kratia[F], dsl: Http4sDsl[F])(implicit F: Concurrent[F]): HttpRoutes[F] = {
+  def KratiaAPI[F[_]](kratia: Kratia[F], dsl: Http4sDsl[F])(implicit F: Concurrent[F]): HttpService[F] = {
     import dsl._
-    HttpRoutes.of[F] {
+    HttpService[F] {
 
-      case request @ GET -> Root =>
-        Ok("pong")
+      case request @ POST -> Root / "member" =>
+        request.as[String]
+          .flatMap(MemberInMem(_)(kratia.members))
+          .flatTap(member => kratia.apiLogger.info("Registered new member: " + member.nickname))
+          .flatMap(member => Ok(member.secret.value.toString))
     }
   }
 
-  private def timeStream[F[_]](config: KratiaConfig)(implicit timer: Timer[F]): Stream[F, Time] =
+  private def timeStream[F[_]](config: KratiaConfig)(implicit timer: Timer[F], F: Sync[F]): Stream[F, Time] =
     Stream
-      .fixedRate(config.appSpeed)
+      .duration[F]
       .evalMap(_ => timer.clockMonotonic(MILLISECONDS))
       .map(Time)
 }

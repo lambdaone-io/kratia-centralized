@@ -4,16 +4,18 @@ import java.util.UUID
 
 import cats.Monoid
 import cats.implicits._
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Concurrent, ConcurrentEffect, Sync}
 import fs2.async.mutable.Topic
 import kratia.state.{State, Store}
 import kratia.kratia_collector.{vote => collectorVote, _}
 import kratia.kratia_community.CommunityEvents.CommunityCreated
 import kratia.kratia_app.KratiaFailure
 import kratia.kratia_member.Member
-import kratia.utils.address
-import kratia.utils.address.Address
+import kratia.utils.Address
+import kratia.utils.Address.genAddress
 import org.http4s.Status
+
+import scala.concurrent.ExecutionContext
 
 object kratia_community {
 
@@ -173,9 +175,9 @@ object kratia_community {
       communitiesStore = Store.StoreFromState(communitiesState)
     } yield Communities(communitiesStore)
 
-  def CommunityInMem[F[_]](name: String)(global: Communities[F])(implicit F: Concurrent[F]): F[Community[F]] =
+  def CommunityInMem[F[_]](name: String)(global: Communities[F])(implicit F: ConcurrentEffect[F], ec: ExecutionContext): F[Community[F]] =
     for {
-      address <- address.genAddress[F]
+      address <- genAddress[F]
       membersState <- State.StateInMem[F, Map[UUID, Address]](Map.empty)
       membersStore = Store.StoreFromState(membersState)
       activeState <- State.StateInMem[F, Map[UUID, Collector[F]]](Map.empty)

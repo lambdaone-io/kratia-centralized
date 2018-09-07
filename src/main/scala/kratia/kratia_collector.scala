@@ -9,7 +9,8 @@ import kratia.state.State
 import kratia.kratia_community._
 import kratia.kratia_app.KratiaFailure
 import kratia.kratia_member.Member
-import kratia.utils.address._
+import kratia.utils.Address
+import kratia.utils.Address._
 import org.http4s.Status
 
 object kratia_collector {
