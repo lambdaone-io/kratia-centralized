@@ -4,6 +4,7 @@ import java.util.UUID
 
 import cats.implicits._
 import cats.effect.Sync
+import io.circe.{Decoder, Encoder}
 import kratia.state.State
 import kratia.kratia_app.KratiaFailure
 import kratia.state.Store
@@ -18,9 +19,18 @@ object kratia_member {
 
   case class Members[F[_]](members: Store[F, Member])
 
-  case class Member(address: Address, nickname: String, reputation: Int, secret: Secret)
+  case class Member(address: Address, nickname: String, secret: Secret)
 
   case class Secret(value: UUID) extends AnyVal
+
+  object Secret {
+
+    implicit val jsonEncoder: Encoder[Secret] =
+      Encoder.encodeUUID.contramap(_.value)
+
+    implicit val jsonDecoder: Decoder[Secret] =
+      Decoder.decodeUUID.map(Secret.apply)
+  }
 
 
   /** Failures */
@@ -43,7 +53,7 @@ object kratia_member {
     for {
       address <- genAddress
       secret <- genSecret
-      member: Member = Member(address, nickname, 0, secret)
+      member: Member = Member(address, nickname, secret)
       _ <- store.members.create(member)
     } yield member
 

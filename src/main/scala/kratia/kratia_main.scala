@@ -18,11 +18,11 @@ object kratia_main extends StreamApp[IO] {
 
   override def stream(args: List[String], requestShutdown: IO[Unit]): Stream[IO, ExitCode] =
     for {
-      app <- Stream.eval(KratiaInMem[IO])
+      app <- KratiaInMem[IO]
       server <- BlazeBuilder[IO]
         .bindHttp(8080, "localhost")
         .mountService(KratiaStaticFiles[IO](app, dsl.io), "/")
-        .mountService(KratiaAPI[IO](app, dsl.io), "/api")
+        .mountService(KratiaMembersAPI[IO](app, dsl.io), "/api/members")
         .serve
     } yield server
 }

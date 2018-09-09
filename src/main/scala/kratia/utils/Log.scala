@@ -13,16 +13,16 @@ trait Log[F[_]] {
 
 object Log {
 
-  def colorPrint[F[_]](implicit F: Sync[F]): Log[F] =
+  def colorPrint[F[_]](name: String)(implicit F: Sync[F]): Log[F] =
     new Log[F] {
 
       override def info(message: String): F[Unit] =
-        F.delay(println(s"[${Console.GREEN}info${Console.RESET}] $message"))
+        F.delay(println(s"[${Console.GREEN}$name${Console.RESET}] $message"))
 
       override def debug(message: String): F[Unit] =
-        F.delay(println(s"[${Console.MAGENTA}info${Console.RESET}] $message"))
+        F.delay(println(s"[${Console.MAGENTA}$name${Console.RESET}] $message"))
 
       override def error(message: String): F[Unit] =
-        F.delay(println(s"[${Console.RED}info${Console.RESET}] $message"))
+        F.delay(println(s"[${Console.RED}$name${Console.RESET}] $message"))
     }
 }
