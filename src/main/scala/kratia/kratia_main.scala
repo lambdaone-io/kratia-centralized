@@ -22,6 +22,7 @@ object kratia_main extends StreamApp[IO] {
       server <- BlazeBuilder[IO]
         .bindHttp(8080, "localhost")
         .mountService(KratiaStaticFiles[IO](app, dsl.io), "/")
+        .mountService(KratiaBroker[IO](app, dsl.io), "/api")
         .mountService(KratiaMembersAPI[IO](app, dsl.io), "/api/members")
         .serve
     } yield server

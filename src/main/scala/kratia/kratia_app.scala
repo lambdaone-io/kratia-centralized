@@ -1,6 +1,6 @@
 package kratia
 
-import fs2.{Scheduler, Sink, Stream}
+import fs2.{Pipe, Scheduler, Sink, Stream}
 import cats.implicits._
 import cats.effect.{ConcurrentEffect, Sync, Timer}
 import org.http4s.{HttpService, StaticFile, Status}
@@ -70,6 +70,27 @@ object kratia_app {
     }
   }
 
+  def KratiaBroker[F[_]](kratia: Kratia[F], dsl: Http4sDsl[F])(implicit F: ConcurrentEffect[F], ec: ExecutionContext): HttpService[F] = {
+    import dsl._
+    HttpService[F] {
+
+      case GET -> Root / "broker" =>
+        val queue = fs2.async.unboundedQueue[F, WebSocketFrame]
+        val stream: Pipe[F, WebSocketFrame, WebSocketFrame] = _.flatMap {
+          case Text("subscribe_members", _) =>
+            kratia.members.events.subscribe(5).map(event => Text(event.toString))
+          case _ =>
+            Stream.emit(Text("unknown_operation"))
+        }
+
+        queue.flatMap { q =>
+          val d = q.dequeue.through(stream)
+          val e = q.enqueue
+          WebSocketBuilder[F].build(d, e)
+        }
+    }
+  }
+
   def KratiaMembersAPI[F[_]](kratia: Kratia[F], dsl: Http4sDsl[F])(implicit F: ConcurrentEffect[F], ec: ExecutionContext): HttpService[F] = {
     import dsl._
     HttpService[F] {
@@ -79,17 +100,6 @@ object kratia_app {
           .flatMap(MemberInMem(_)(kratia.members))
           .flatTap(member => kratia.apiLogger.info("Registered new member: " + member.nickname))
           .flatMap(member => Ok(member.asJson))
-
-      case GET -> Root / "broker" =>
-        val toClient: Stream[F, WebSocketFrame] =
-          kratia.scheduler.awakeEvery[F](1.seconds).map(d => Text(s"Ping! $d"))
-        val fromClient: Sink[F, WebSocketFrame] = _.evalMap { ws: WebSocketFrame =>
-          ws match {
-            case Text(t, _) => kratia.apiLogger.info(t)
-            case f => kratia.apiLogger.info(s"Unknown type: $f")
-          }
-        }
-        WebSocketBuilder[F].build(toClient, fromClient)
     }
   }
 
