@@ -8,9 +8,7 @@ import cats.Functor
 import kratia.state.State
 import kratia.kratia_community._
 import kratia.kratia_app.KratiaFailure
-import kratia.kratia_member.Member
-import kratia.utils.Address
-import kratia.utils.Address._
+import kratia.kratia_core_model.{Address, Member}
 import org.http4s.Status
 
 object kratia_collector {
@@ -58,10 +56,10 @@ object kratia_collector {
 
   def CollectorInMem[F[_]](decision: Decision, community: Community[F], action: DecisionAction[F])(implicit F: Sync[F]): F[Collector[F]] =
     for {
-      openState <- State.StateInMem[F, Boolean](false)
-      ballotState <- State.StateInMem[F, Ballot](Ballot(Map.empty))
-      votedState <- State.StateInMem[F, List[(Address, ProofOfVote)]](List.empty)
-      address <- genAddress[F]
+      openState <- State.inMem[F, Boolean](false)
+      ballotState <- State.inMem[F, Ballot](Ballot(Map.empty))
+      votedState <- State.inMem[F, List[(Address, ProofOfVote)]](List.empty)
+      address <- Address.gen[F]
     } yield Collector[F](address, decision, community, action, CollectorStore(openState, ballotState, votedState))
 
   def vote[F[_]](member: Member, vote: Vote)(collector: Collector[F])(implicit F: Sync[F]): F[ProofOfVote] =

@@ -17,7 +17,7 @@ trait State[F[_], A] {
 
 object State {
 
-  def StateInMem[F[_], A](a: A)(implicit F: Sync[F]): F[State[F, A]] =
+  def inMem[F[_], A](a: A)(implicit F: Sync[F]): F[State[F, A]] =
     Ref[F, A](a).map { ref =>
       new State[F, A] {
 

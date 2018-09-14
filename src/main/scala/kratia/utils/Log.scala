@@ -1,14 +1,29 @@
 package kratia.utils
 
+import cats.implicits._
+import cats.Show
 import cats.effect.{IO, Sync}
+import fs2.Sink
 
 trait Log[F[_]] {
 
   def info(message: String): F[Unit]
 
+  def info[A: Show]: Sink[F, A] =
+    _.map(_.show).evalMap(info)
+
+  def infoNote[A: Show](note: String): Sink[F, A] =
+    _.map(_.show).map(a => s"<$a> $note").evalMap(info)
+
   def debug(message: String): F[Unit]
 
+  def debug[A: Show]: Sink[F, A] =
+    _.map(_.show).evalMap(debug)
+
   def error(message: String): F[Unit]
+
+  def error[A: Show]: Sink[F, A] =
+    _.map(_.show).evalMap(error)
 }
 
 object Log {

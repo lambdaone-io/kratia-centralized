@@ -2,6 +2,7 @@ package kratia.state
 
 import java.util.UUID
 
+import cats.effect.Sync
 import cats.implicits._
 import cats.{Functor, Monad, MonadError}
 
@@ -37,7 +38,10 @@ trait Store[F[_], A] {
 
 object Store {
 
-  def StoreFromState[F[_], A](state: State[F, Map[UUID, A]])(implicit F: Monad[F]): Store[F, A] =
+  def inMem[F[_], A](implicit F: Sync[F]): F[Store[F, A]] =
+    State.inMem[F, Map[UUID, A]](Map.empty).map(fromState[F, A])
+
+  def fromState[F[_], A](state: State[F, Map[UUID, A]])(implicit F: Monad[F]): Store[F, A] =
     new Store[F, A] {
 
       override def create(a: A): F[Instance[A]] = {

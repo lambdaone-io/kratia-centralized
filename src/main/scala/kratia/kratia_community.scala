@@ -4,15 +4,13 @@ import java.util.UUID
 
 import cats.Monoid
 import cats.implicits._
-import cats.effect.{Concurrent, ConcurrentEffect, Sync}
+import cats.effect.{ConcurrentEffect, Sync}
 import fs2.async.mutable.Topic
 import kratia.state.{State, Store}
 import kratia.kratia_collector.{vote => collectorVote, _}
 import kratia.kratia_community.CommunityEvents.CommunityCreated
 import kratia.kratia_app.KratiaFailure
-import kratia.kratia_member.Member
-import kratia.utils.Address
-import kratia.utils.Address.genAddress
+import kratia.kratia_core_model.{Address, Member}
 import org.http4s.Status
 
 import scala.concurrent.ExecutionContext
@@ -171,19 +169,19 @@ object kratia_community {
 
   def CommunitiesInMem[F[_]](implicit F: Sync[F]): F[Communities[F]] =
     for {
-      communitiesState <- State.StateInMem[F, Map[UUID, Community[F]]](Map.empty)
-      communitiesStore = Store.StoreFromState(communitiesState)
+      communitiesState <- State.inMem[F, Map[UUID, Community[F]]](Map.empty)
+      communitiesStore = Store.fromState(communitiesState)
     } yield Communities(communitiesStore)
 
   def CommunityInMem[F[_]](name: String)(global: Communities[F])(implicit F: ConcurrentEffect[F], ec: ExecutionContext): F[Community[F]] =
     for {
-      address <- genAddress[F]
-      membersState <- State.StateInMem[F, Map[UUID, Address]](Map.empty)
-      membersStore = Store.StoreFromState(membersState)
-      activeState <- State.StateInMem[F, Map[UUID, Collector[F]]](Map.empty)
-      activeStore = Store.StoreFromState(activeState)
-      allocationState <- State.StateInMem[F, Map[DecisionType, InfluenceDistributionType]](Map.empty)
-      resolutionState <- State.StateInMem[F, Map[DecisionType, DecisionResolutionType]](Map.empty)
+      address <- Address.gen[F]
+      membersState <- State.inMem[F, Map[UUID, Address]](Map.empty)
+      membersStore = Store.fromState(membersState)
+      activeState <- State.inMem[F, Map[UUID, Collector[F]]](Map.empty)
+      activeStore = Store.fromState(activeState)
+      allocationState <- State.inMem[F, Map[DecisionType, InfluenceDistributionType]](Map.empty)
+      resolutionState <- State.inMem[F, Map[DecisionType, DecisionResolutionType]](Map.empty)
       store = CommunityStore(membersStore, activeStore, allocationState, resolutionState)
       dependencies = CommunityDependencies(kratia_collector.CollectorInMem[F])
       topic <- Topic[F, CommunityEvents](CommunityCreated(name))

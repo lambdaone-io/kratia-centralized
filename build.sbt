@@ -14,9 +14,12 @@ scalacOptions ++= Seq(
 
 lazy val http4s = "0.18.17"
 
+lazy val circe = "0.9.3"
+
 libraryDependencies ++= List(
   "com.typesafe" % "config" % "1.3.2",
-  "io.circe" %% "circe-generic" % "0.9.3",
+  "io.circe" %% "circe-generic" % circe,
+  "io.circe" %% "circe-parser" % circe,
   "org.http4s" %% "http4s-blaze-server" % http4s,
   "org.http4s" %% "http4s-circe" % http4s,
   "org.http4s" %% "http4s-dsl" % http4s,
