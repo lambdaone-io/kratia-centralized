@@ -3,13 +3,13 @@ package kratia
 import cats.Show
 import fs2.{Pipe, Scheduler, Sink, Stream}
 import cats.implicits._
-import cats.effect.{ConcurrentEffect, Effect, Sync, Timer}
+import cats.effect.{ConcurrentEffect, Sync, Timer}
 import org.http4s.{HttpService, StaticFile, Status}
 import kratia.kratia_community._
 import kratia.kratia_configuration._
 import kratia.kratia_protocol.{InMessage, KrRequest, OutMessage, ProtocolMessage}
 import kratia.utils.Logger
-import kratia.kratia_core_model.{DoUnsub, Member}
+import kratia.kratia_core_model.{Interrupt, Member}
 import kratia.members_events.MembersTopic
 import kratia.members_store.MemberStore
 import kratia.state.State
@@ -41,7 +41,7 @@ object kratia_app {
   case class Time(value: Long) extends AnyVal
 
   case class SubFeed[F[_]](
-                            subscriptions: State[F, Map[String, DoUnsub[F]]],
+                            subscriptions: State[F, Map[String, Interrupt[F]]],
                             redirect: fs2.async.mutable.Queue[F, OutMessage],
                             reqQueue: fs2.async.mutable.Queue[F, KrRequest]
   )
@@ -104,7 +104,7 @@ object kratia_app {
     for {
       requestsQueue <- fs2.async.unboundedQueue[F, KrRequest]
       redirectQueue <- fs2.async.unboundedQueue[F, OutMessage]
-      subscriptions <- State.inMem[F, Map[String, DoUnsub[F]]](Map.empty)
+      subscriptions <- State.inMem[F, Map[String, Interrupt[F]]](Map.empty)
       feed: SubFeed[F] = SubFeed[F](subscriptions, redirectQueue, requestsQueue)
       send: Stream[F, OutMessage] = requestsQueue
         .dequeue.through(handleRequest)
@@ -114,7 +114,7 @@ object kratia_app {
     } yield Connection[F](send, receive)
   }
 
-  def handleRequest[F[_]](implicit kratia: Kratia[F], F: Effect[F], ec: ExecutionContext): Pipe[F, KrRequest, OutMessage] =
+  def handleRequest[F[_]](implicit kratia: Kratia[F], F: ConcurrentEffect[F], ec: ExecutionContext): Pipe[F, KrRequest, OutMessage] =
     _.evalMap {
       case Register(nickname) =>
         Member.create[F](nickname)(kratia.memberStore, kratia.membersTopic)
@@ -124,7 +124,7 @@ object kratia_app {
           .map[OutMessage](_ => LogFromServer(message.toString))
     }
 
-  def handleInMessages[F[_]](feed: SubFeed[F])(implicit kratia: Kratia[F], F: Effect[F], ec: ExecutionContext): Sink[F, ProtocolMessage] =
+  def handleInMessages[F[_]](feed: SubFeed[F])(implicit kratia: Kratia[F], F: ConcurrentEffect[F], ec: ExecutionContext): Sink[F, ProtocolMessage] =
     _.evalMap {
         case Subscribe(topic) if topic == MembersTopic.NAME =>
           subscribeInto[F](feed, topic, kratia.membersTopic.subscribeInto(feed.redirect))
@@ -141,7 +141,7 @@ object kratia_app {
           kratia.log.debug("Received message out of protocol: " + other)
       }
 
-  def subscribeInto[F[_]](feed: SubFeed[F], name: String, subscribe: F[DoUnsub[F]])(implicit F: Sync[F]): F[Unit] =
+  def subscribeInto[F[_]](feed: SubFeed[F], name: String, subscribe: F[Interrupt[F]])(implicit F: Sync[F]): F[Unit] =
     for {
       unsubscribe <- subscribe
       _ <- feed.subscriptions.update(_ + (name -> unsubscribe))
@@ -158,7 +158,7 @@ object kratia_app {
       _ <- unsubscribe
     } yield ()
 
-  def errorHandler[F[_]](implicit kratia: Kratia[F], F: Effect[F], ec: ExecutionContext): Pipe[F, OutMessage, OutMessage] =
+  def errorHandler[F[_]](implicit kratia: Kratia[F], F: ConcurrentEffect[F], ec: ExecutionContext): Pipe[F, OutMessage, OutMessage] =
     _.handleErrorWith {
       case failure: KratiaFailure =>
         Stream.emit(failure)

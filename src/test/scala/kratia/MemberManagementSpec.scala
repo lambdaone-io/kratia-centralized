@@ -1,52 +1,43 @@
 package kratia
 
-import cats.effect._
-import kratia.kratia_app.{Connection, Kratia}
-import org.scalatest.{Assertion, AsyncFunSuite}
-import KratiaSuite._
-import fs2.Stream
-import fs2.async.mutable.{Queue, Signal}
-import kratia.kratia_protocol.{InMessage, OutMessage}
+import kratia.helpers.KratiaSuite
+import kratia.kratia_core_model.Member
+import kratia.kratia_protocol.ProtocolMessage.{KratiaEvent, Register, Registered, Subscribe}
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.duration._
 
 class MemberManagementSpec extends KratiaSuite {
 
-  test("1")
-}
+  test("Register user simple") {
+    exec { context =>
+      for {
+        _ <- context ! Register("vledic")
+        _ <- context ! Subscribe("members")
+        notifications <- context.within(1.second).expect("registration notifications") {
+          case Registered(Member(_, "vledic", _)) => true
+          case KratiaEvent("members", _, _) => true
+          case _ => false
+        }
+      } yield {
+        assert(notifications.length === 3)
+      }
+    }
+  }
 
-abstract class KratiaSuite extends AsyncFunSuite {
-
-  implicit val timer: Timer[IO] = IO.timer(executionContext)
-
-  def exec(f: Context => IO[Assertion]): Future[Assertion] =
-    (for {
-      kratia <- kratia_app.KratiaInMem[IO].compile.toList
-      connection <- kratia_app.connect[IO](kratia.head, ConcurrentEffect[IO], executionContext)
-      testSendQueue <- fs2.async.unboundedQueue[IO, InMessage]
-      testReceiveQueue <- fs2.async.unboundedQueue[IO, OutMessage]
-      interruptSend <- runWithInterrupt(testSendQueue.dequeue.to(connection.receive))
-      interruptReceive <- runWithInterrupt(connection.send.to(testReceiveQueue.enqueue))
-      context = Context(kratia.head, connection, testSendQueue, testReceiveQueue)
-      assertion <- f(context)
-      _ <- interruptSend
-      _ <- interruptReceive
-    } yield assertion).unsafeToFuture()
-
-  type Interrupt[F[_]] = F[Unit]
-
-  private def runWithInterrupt[F[_], A](stream: Stream[F, A])(implicit F: Effect[F], ec: ExecutionContext): F[Interrupt[F]] =
-    for {
-      interrupt <- Signal[F, Boolean](false)
-      _ <- stream.interruptWhen(interrupt).compile.drain
-    } yield interrupt.set(false)
-}
-
-object KratiaSuite {
-
-  case class Context(kratia: Kratia[IO], connection: Connection[IO], testSendQueue: Queue[IO, InMessage], testReceiveQueue: Queue[IO, OutMessage]) {
-
-    def ! (message: InMessage): IO[Unit] =
-      connection.
+  test("Register user notifications 1") {
+    exec { context =>
+      for {
+        _ <- context ! Subscribe("members")
+        _ <- context ! Register("vledic")
+        _ <- context ! Register("vledic2")
+        _ <- context ! Register("vledic3")
+        notifications <- context.within(1.second).expect("registration notifications") {
+          case KratiaEvent("members", "new_member", _) => true
+          case _ => false
+        }
+      } yield {
+        assert(notifications.length === 3)
+      }
+    }
   }
 }

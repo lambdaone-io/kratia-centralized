@@ -3,9 +3,11 @@ package kratia
 import io.circe.{Decoder, Encoder}
 import java.util.UUID
 
+import fs2.Stream
+import fs2.async.mutable.Signal
 import cats.Show
 import cats.implicits._
-import cats.effect.{Effect, Sync}
+import cats.effect.{ConcurrentEffect, Effect, Sync}
 import kratia.members_auth.Secret
 import kratia.members_events.MembersTopic
 import kratia.members_store.MemberStore
@@ -45,5 +47,12 @@ object kratia_core_model {
       member => s"M(${member.nickname})]"
   }
 
-  type DoUnsub[F[_]] = F[Unit]
+  type Interrupt[F[_]] = F[Unit]
+
+  def runWithInterrupt[F[_], A](stream: Stream[F, A])(implicit F: ConcurrentEffect[F], ec: ExecutionContext): F[Interrupt[F]] =
+    for {
+      interrupt <- Signal[F, Boolean](false)
+      _ <- F.start(stream.interruptWhen(interrupt).compile.drain)
+    } yield interrupt.set(false)
+
 }

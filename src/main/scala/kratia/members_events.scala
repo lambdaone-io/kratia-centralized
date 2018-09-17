@@ -1,12 +1,12 @@
 package kratia
 
 import cats.implicits._
-import cats.effect.{Effect, Sync}
-import fs2.async.mutable.{Queue, Signal, Topic}
+import cats.effect.{ConcurrentEffect, Effect, Sync}
+import fs2.async.mutable.{Queue, Topic}
 import io.circe.Json
 import io.circe.syntax._
 import io.circe.generic.auto._
-import kratia.kratia_core_model.{DoUnsub, Member}
+import kratia.kratia_core_model.{Interrupt, Member, runWithInterrupt}
 import kratia.kratia_protocol.OutMessage
 import kratia.kratia_protocol.ProtocolMessage.KratiaEvent
 import kratia.members_events.MembersEvents.{MembersBoot, NewMember}
@@ -22,15 +22,8 @@ object members_events {
     def publishNewMember(member: Member)(implicit F: Sync[F]): F[Unit] =
       topic.publish1(cleanNewMember(member))
 
-    def subscribeInto(queue: Queue[F, OutMessage])(implicit F: Effect[F], ec: ExecutionContext): F[DoUnsub[F]] =
-      for {
-        interrupt <- Signal[F, Boolean](false)
-        _ <- topic.subscribe(5)
-          .interruptWhen(interrupt)
-          .map(toEvent)
-          .to(queue.enqueue)
-          .compile.drain
-      } yield interrupt.set(true)
+    def subscribeInto(queue: Queue[F, OutMessage])(implicit F: ConcurrentEffect[F], ec: ExecutionContext): F[Interrupt[F]] =
+      runWithInterrupt(topic.subscribe(5).map(toEvent).to(queue.enqueue))
   }
 
   object MembersTopic {
