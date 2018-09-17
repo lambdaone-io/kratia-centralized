@@ -9,8 +9,8 @@ import fs2.async.mutable.Topic
 import kratia.state.{State, Store}
 import kratia.kratia_collector.{vote => collectorVote, _}
 import kratia.kratia_community.CommunityEvents.CommunityCreated
-import kratia.kratia_app.KratiaFailure
 import kratia.kratia_core_model.{Address, Member}
+import kratia.kratia_protocol.ProtocolMessage.KratiaFailure
 import org.http4s.Status
 
 import scala.concurrent.ExecutionContext
@@ -154,15 +154,9 @@ object kratia_community {
 
   /** Failures */
 
-  case class UnauthorizedMember(member: Member) extends RuntimeException with KratiaFailure {
-    override def code: Status = Status.Unauthorized
-    override def message: String = s"Operation cannot be performed for member ${member.nickname}"
-  }
+  def UnauthorizedMember(member: Member): KratiaFailure = KratiaFailure(Status.Unauthorized.code, s"Operation cannot be performed for member ${member.nickname}")
 
-  case class UnequalDecisionTypes(a: DecisionType, b: DecisionType) extends IllegalStateException with KratiaFailure {
-    override def code: Status = Status.InternalServerError
-    override def message: String = s"$a =/= $b this state should never be reached"
-  }
+  def UnequalDecisionTypes(a: DecisionType, b: DecisionType): KratiaFailure = KratiaFailure(Status.InternalServerError.code, s"$a =/= $b this state should never be reached")
 
 
   /** Functions */

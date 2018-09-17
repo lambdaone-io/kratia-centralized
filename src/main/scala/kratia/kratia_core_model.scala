@@ -5,11 +5,12 @@ import java.util.UUID
 
 import cats.Show
 import cats.implicits._
-import cats.effect.Sync
-import fs2.Pipe
+import cats.effect.{Effect, Sync}
 import kratia.members_auth.Secret
 import kratia.members_events.MembersTopic
 import kratia.members_store.MemberStore
+
+import scala.concurrent.ExecutionContext
 
 object kratia_core_model {
 
@@ -31,19 +32,18 @@ object kratia_core_model {
 
   object Member {
 
-    def create[F[_]](store: MemberStore[F], events: MembersTopic[F])(implicit F: Sync[F]): Pipe[F, String, Member] =
-      _.evalMap { nickname =>
-          for {
-            address <- Address.gen[F]
-            secret <- Secret.gen[F]
-            member = Member(address, nickname, Some(secret))
-          } yield member
-        }
-        .evalMap(store.save)
-        .map(_.model)
-        .observe(events.newMember)
+    def create[F[_]](nickname: String)(store: MemberStore[F], events: MembersTopic[F])(implicit F: Effect[F], ec: ExecutionContext): F[Member] =
+      for {
+        address <- Address.gen[F]
+        secret <- Secret.gen[F]
+        member = Member(address, nickname, Some(secret))
+        _ <- store.save(member)
+        _ <- events.publishNewMember(member)
+      } yield member
 
     implicit val showMember: Show[Member] =
       member => s"M(${member.nickname})]"
   }
+
+  type DoUnsub[F[_]] = F[Unit]
 }

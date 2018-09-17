@@ -2,8 +2,8 @@ package kratia
 
 import cats.implicits._
 import cats.effect.Effect
-import kratia.kratia_app.KratiaFailure
 import kratia.kratia_core_model.Member
+import kratia.kratia_protocol.ProtocolMessage.KratiaFailure
 import kratia.state.{Instance, Store}
 import org.http4s.Status
 
@@ -28,8 +28,5 @@ object members_store {
 
   /** Failures */
 
-  case object MemberNotFound extends RuntimeException with KratiaFailure {
-    override def code: Status = Status.NotFound
-    override def message: String = "Member not found."
-  }
+  val MemberNotFound: KratiaFailure = KratiaFailure(Status.NotFound.code, "Member not found.")
 }

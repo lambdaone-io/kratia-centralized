@@ -7,8 +7,8 @@ import cats.implicits._
 import cats.Functor
 import kratia.state.State
 import kratia.kratia_community._
-import kratia.kratia_app.KratiaFailure
 import kratia.kratia_core_model.{Address, Member}
+import kratia.kratia_protocol.ProtocolMessage.KratiaFailure
 import org.http4s.Status
 
 object kratia_collector {
@@ -31,25 +31,13 @@ object kratia_collector {
 
   /** Failures */
 
-  case class CollectorNotFound(address: Address) extends RuntimeException with KratiaFailure {
-    val code: Status = Status.NotFound
-    val message: String = s"Operation on collector ${address.value} couldn't be done because the collector was not found."
-  }
+  def CollectorNotFound(address: Address): KratiaFailure = KratiaFailure(Status.NotFound.code, s"Operation on collector ${address.value} couldn't be done because the collector was not found.")
 
-  case class BallotAlreadyClosed(member: Member) extends RuntimeException with KratiaFailure {
-    val code: Status = Status.BadRequest
-    val message: String = s"${member.nickname} can't vote on already closed ballot."
-  }
+  def BallotAlreadyClosed(member: Member): KratiaFailure = KratiaFailure(Status.BadRequest.code, s"${member.nickname} can't vote on already closed ballot.")
 
-  case class MemberAlreadyVoted(member: Member) extends RuntimeException with KratiaFailure {
-    val code: Status = Status.BadRequest
-    val message: String = s"${member.nickname} already voted."
-  }
+  def MemberAlreadyVoted(member: Member): KratiaFailure = KratiaFailure(Status.BadRequest.code, s"${member.nickname} already voted.")
 
-  case object VoteMustBeOfSameProposal extends RuntimeException with KratiaFailure {
-    override def code: Status = Status.BadRequest
-    override def message: String = s"Not a valid proposal type, the vote must match the decision proposal type."
-  }
+  val VoteMustBeOfSameProposal: KratiaFailure = KratiaFailure(Status.BadRequest.code, s"Not a valid proposal type, the vote must match the decision proposal type.")
 
 
   /** Functions */
