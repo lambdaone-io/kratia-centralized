@@ -1,15 +1,15 @@
-package kratia
+package kratia.members
 
-import cats.implicits._
 import cats.effect.{ConcurrentEffect, Effect, Sync}
+import cats.implicits._
 import fs2.async.mutable.{Queue, Topic}
 import io.circe.Json
-import io.circe.syntax._
 import io.circe.generic.auto._
+import io.circe.syntax._
 import kratia.kratia_core_model.{Interrupt, Member, runWithInterrupt}
 import kratia.kratia_protocol.OutMessage
 import kratia.kratia_protocol.ProtocolMessage.KratiaEvent
-import kratia.members_events.MembersEvents.{MembersBoot, NewMember}
+import kratia.members.members_events.MembersEvents.{MembersBoot, NewMember}
 
 import scala.concurrent.ExecutionContext
 

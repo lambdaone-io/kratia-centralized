@@ -4,13 +4,16 @@ import io.circe.{Decoder, Encoder}
 import java.util.UUID
 
 import fs2.Stream
-import fs2.async.mutable.Signal
+import fs2.async.mutable.{Signal, Topic}
 import cats.Show
 import cats.implicits._
 import cats.effect.{ConcurrentEffect, Effect, Sync}
-import kratia.members_auth.Secret
-import kratia.members_events.MembersTopic
-import kratia.members_store.MemberStore
+import kratia.communities.communities_decision.CommunityDependencies
+import kratia.communities.communities_events.CommunityEvents
+import kratia.communities.communities_store.CommunityStore
+import kratia.members.members_auth.Secret
+import kratia.members.members_events.MembersTopic
+import kratia.members.members_store.MemberStore
 
 import scala.concurrent.ExecutionContext
 
@@ -46,6 +49,15 @@ object kratia_core_model {
     implicit val showMember: Show[Member] =
       member => s"M(${member.nickname})]"
   }
+
+  case class Community[F[_]](
+    address: Address,
+    name: String,
+    domain: String,
+    events: Topic[F, CommunityEvents],
+    store: CommunityStore[F],
+    dependencies: CommunityDependencies[F]
+  )
 
   type Interrupt[F[_]] = F[Unit]
 

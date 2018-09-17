@@ -5,19 +5,20 @@ import fs2.{Pipe, Scheduler, Sink, Stream}
 import cats.implicits._
 import cats.effect.{ConcurrentEffect, Sync, Timer}
 import org.http4s.{HttpService, StaticFile, Status}
-import kratia.kratia_community._
+import kratia.communities.communities_store.CommunitiesInMem
 import kratia.kratia_configuration._
 import kratia.kratia_protocol.{InMessage, KrRequest, OutMessage, ProtocolMessage}
 import kratia.utils.Logger
 import kratia.kratia_core_model.{Interrupt, Member}
-import kratia.members_events.MembersTopic
-import kratia.members_store.MemberStore
+import kratia.members.members_events.MembersTopic
+import kratia.members.members_store.MemberStore
 import kratia.state.State
 import org.http4s.dsl.Http4sDsl
 import org.http4s.server.websocket.WebSocketBuilder
 import org.http4s.websocket.WebsocketBits.{Text, WebSocketFrame}
 import io.circe.parser.parse
 import io.circe.Json
+import kratia.communities.communities_store.Communities
 import kratia.kratia_protocol.ProtocolMessage.{KratiaFailure, LogFromServer, Register, Registered, Subscribe, Unsubscribe}
 import kratia.utils.Logger.ColorPrint
 

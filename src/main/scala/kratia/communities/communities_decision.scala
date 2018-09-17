@@ -1,42 +1,18 @@
-package kratia
-
-import java.util.UUID
+package kratia.communities
 
 import cats.Monoid
+import cats.effect.Sync
 import cats.implicits._
-import cats.effect.{ConcurrentEffect, Sync}
-import fs2.async.mutable.Topic
-import kratia.state.{State, Store}
-import kratia.kratia_collector.{vote => collectorVote, _}
-import kratia.kratia_community.CommunityEvents.CommunityCreated
-import kratia.kratia_core_model.{Address, Member}
+import kratia.communities.communities_events.CommunityEvents
+import communities_collector.{vote => collectorVote, _}
+import kratia.kratia_core_model.{Address, Community, Member}
 import kratia.kratia_protocol.ProtocolMessage.KratiaFailure
 import org.http4s.Status
 
-import scala.concurrent.ExecutionContext
-
-object kratia_community {
+object communities_decision {
 
 
   /** Models */
-
-  case class Communities[F[_]](communities: Store[F, Community[F]])
-
-  case class Community[F[_]](
-    address: Address,
-    name: String,
-    domain: String,
-    events: Topic[F, CommunityEvents],
-    store: CommunityStore[F],
-    dependencies: CommunityDependencies[F]
-  )
-
-  case class CommunityStore[F[_]](
-    members: Store[F, Address],
-    active: Store[F, Collector[F]],
-    allocation: State[F, Map[DecisionType, InfluenceDistributionType]],
-    resolution: State[F, Map[DecisionType, DecisionResolutionType]]
-  )
 
   case class CommunityDependencies[F[_]](
     newCollector: (Decision, Community[F], DecisionAction[F]) => F[Collector[F]]
@@ -134,53 +110,16 @@ object kratia_community {
   }
 
 
-  /** Events */
-
-  sealed trait CommunityEvents
-
-  object CommunityEvents {
-
-    case class CommunityCreated(name: String) extends CommunityEvents
-
-    case class Voted(vote: Vote, decision: Decision) extends CommunityEvents
-
-    case class Resolved(ballot: Address, decision: Decision, vote: Vote) extends CommunityEvents
-
-    case class MemberAdded(member: Address, nickname: String) extends CommunityEvents
-
-    case class DecisionSystemChanged(community: Address, decisionType: DecisionType, allocation: InfluenceDistributionType, resolution: DecisionResolutionType) extends CommunityEvents
-  }
-
-
   /** Failures */
 
-  def UnauthorizedMember(member: Member): KratiaFailure = KratiaFailure(Status.Unauthorized.code, s"Operation cannot be performed for member ${member.nickname}")
+  def UnauthorizedMember(member: Member): KratiaFailure =
+    KratiaFailure(Status.Unauthorized.code, s"Operation cannot be performed for member ${member.nickname}")
 
-  def UnequalDecisionTypes(a: DecisionType, b: DecisionType): KratiaFailure = KratiaFailure(Status.InternalServerError.code, s"$a =/= $b this state should never be reached")
+  def UnequalDecisionTypes(a: DecisionType, b: DecisionType): KratiaFailure =
+    KratiaFailure(Status.InternalServerError.code, s"$a =/= $b this state should never be reached")
 
 
   /** Functions */
-
-  def CommunitiesInMem[F[_]](implicit F: Sync[F]): F[Communities[F]] =
-    for {
-      communitiesState <- State.inMem[F, Map[UUID, Community[F]]](Map.empty)
-      communitiesStore = Store.fromState(communitiesState)
-    } yield Communities(communitiesStore)
-
-  def CommunityInMem[F[_]](name: String)(global: Communities[F])(implicit F: ConcurrentEffect[F], ec: ExecutionContext): F[Community[F]] =
-    for {
-      address <- Address.gen[F]
-      membersState <- State.inMem[F, Map[UUID, Address]](Map.empty)
-      membersStore = Store.fromState(membersState)
-      activeState <- State.inMem[F, Map[UUID, Collector[F]]](Map.empty)
-      activeStore = Store.fromState(activeState)
-      allocationState <- State.inMem[F, Map[DecisionType, InfluenceDistributionType]](Map.empty)
-      resolutionState <- State.inMem[F, Map[DecisionType, DecisionResolutionType]](Map.empty)
-      store = CommunityStore(membersStore, activeStore, allocationState, resolutionState)
-      dependencies = CommunityDependencies(kratia_collector.CollectorInMem[F])
-      topic <- Topic[F, CommunityEvents](CommunityCreated(name))
-      community <- global.communities.create(Community[F](address, name, "root", topic, store, dependencies))
-    } yield community.model
 
   def vote[F[_]](sender: Member, address: Address, vote: Vote)(community: Community[F])(implicit F: Sync[F]): F[ProofOfVote] =
     for {

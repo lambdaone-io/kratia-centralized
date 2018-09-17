@@ -1,17 +1,17 @@
-package kratia
+package kratia.communities
 
 import java.util.UUID
 
+import cats.Functor
 import cats.effect.Sync
 import cats.implicits._
-import cats.Functor
-import kratia.state.State
-import kratia.kratia_community._
-import kratia.kratia_core_model.{Address, Member}
+import kratia.communities.communities_decision._
+import kratia.kratia_core_model.{Address, Community, Member}
 import kratia.kratia_protocol.ProtocolMessage.KratiaFailure
+import kratia.state.State
 import org.http4s.Status
 
-object kratia_collector {
+object communities_collector {
 
 
   /** Models */
@@ -64,7 +64,7 @@ object kratia_collector {
   def close[F[_]](collector: Collector[F])(implicit F: Sync[F]): F[Unit] =
     for {
       _ <- collector.store.open.set(false)
-      _ <- kratia_community.reportDecision(collector)(collector.community)
+      _ <- communities_decision.reportDecision(collector)(collector.community)
     } yield ()
 
   private def checkIfOpen[F[_]](member: Member)(collector: Collector[F])(implicit F: Sync[F]): F[Collector[F]] =

@@ -1,14 +1,13 @@
-package kratia
+package kratia.members
 
 import java.util.UUID
 
-import cats.implicits._
 import cats.effect.Sync
+import cats.implicits._
 import fs2.Pipe
 import io.circe.{Decoder, Encoder}
 import kratia.kratia_core_model.Member
-import kratia.members_store.MemberNotFound
-import kratia.members_store.MemberStore
+import kratia.members.members_store.{MemberNotFound, MemberStore}
 
 object members_auth {
 

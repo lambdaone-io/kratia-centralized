@@ -1,7 +1,7 @@
-package kratia
+package kratia.members
 
-import cats.implicits._
 import cats.effect.Effect
+import cats.implicits._
 import kratia.kratia_core_model.Member
 import kratia.kratia_protocol.ProtocolMessage.KratiaFailure
 import kratia.state.{Instance, Store}

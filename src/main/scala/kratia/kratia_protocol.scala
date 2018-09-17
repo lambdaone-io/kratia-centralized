@@ -3,7 +3,7 @@ package kratia
 import io.circe.{Decoder, DecodingFailure, Encoder, Json}
 import io.circe.generic.auto._
 import kratia.kratia_core_model.Member
-import kratia.members_auth.Secret
+import kratia.members.members_auth.Secret
 
 object kratia_protocol {
 
