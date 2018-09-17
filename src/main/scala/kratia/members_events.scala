@@ -2,7 +2,6 @@ package kratia
 
 import cats.implicits._
 import cats.effect.{Effect, Sync}
-import fs2.Sink
 import fs2.async.mutable.{Queue, Signal, Topic}
 import io.circe.Json
 import io.circe.syntax._

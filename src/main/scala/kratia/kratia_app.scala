@@ -105,7 +105,7 @@ object kratia_app {
       requestsQueue <- fs2.async.unboundedQueue[F, KrRequest]
       redirectQueue <- fs2.async.unboundedQueue[F, OutMessage]
       subscriptions <- State.inMem[F, Map[String, DoUnsub[F]]](Map.empty)
-      feed: SubFeed[F] = SubFeed(subscriptions, redirectQueue, requestsQueue)
+      feed: SubFeed[F] = SubFeed[F](subscriptions, redirectQueue, requestsQueue)
       send: Stream[F, OutMessage] = requestsQueue
         .dequeue.through(handleRequest)
         .merge(redirectQueue.dequeue)
