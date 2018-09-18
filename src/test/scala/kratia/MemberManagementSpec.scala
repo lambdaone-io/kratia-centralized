@@ -1,8 +1,8 @@
 package kratia
 
 import kratia.helpers.KratiaSuite
-import kratia.kratia_core_model.Member
-import kratia.kratia_protocol.ProtocolMessage.{KratiaEvent, Register, Registered, Subscribe}
+import kratia.Protocol.ProtocolMessage.{KratiaEvent, Register, Registered, Subscribe}
+import kratia.members.Member
 
 import scala.concurrent.duration._
 

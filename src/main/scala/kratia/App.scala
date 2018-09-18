@@ -5,47 +5,45 @@ import fs2.{Pipe, Scheduler, Sink, Stream}
 import cats.implicits._
 import cats.effect.{ConcurrentEffect, Sync, Timer}
 import org.http4s.{HttpService, StaticFile, Status}
-import kratia.communities.communities_store.CommunitiesInMem
-import kratia.kratia_configuration._
-import kratia.kratia_protocol.{InMessage, KrRequest, OutMessage, ProtocolMessage}
-import kratia.utils.Logger
-import kratia.kratia_core_model.{Interrupt, Member}
-import kratia.members.members_events.MembersTopic
-import kratia.members.members_store.MemberStore
-import kratia.state.State
+import kratia.Configuration._
+import kratia.Protocol.{InMessage, KrRequest, OutMessage, ProtocolMessage}
+import kratia.utils.{Interrupt, KratiaChannels, Logger, State}
 import org.http4s.dsl.Http4sDsl
 import org.http4s.server.websocket.WebSocketBuilder
 import org.http4s.websocket.WebsocketBits.{Text, WebSocketFrame}
 import io.circe.parser.parse
 import io.circe.Json
-import kratia.communities.communities_store.Communities
-import kratia.kratia_protocol.ProtocolMessage.{KratiaFailure, LogFromServer, Register, Registered, Subscribe, Unsubscribe}
+import kratia.Protocol.ProtocolMessage.{KratiaFailure, LogFromServer, Register, Registered, Subscribe, Unsubscribe}
+import kratia.communities.CommunitiesService
+import kratia.members.MemberService
 import kratia.utils.Logger.ColorPrint
 
 import scala.concurrent.ExecutionContext
-import scala.concurrent.duration._
 
-object kratia_app {
-
+object App {
 
   /** Models  */
 
   case class Kratia[F[_]](
-    memberStore: MemberStore[F],
-    membersTopic: MembersTopic[F],
-    communities: Communities[F],
-    timeStream: Stream[F, Time],
+    channels: KratiaChannels[F],
+    members: MemberService[F],
+    communities: CommunitiesService[F],
     scheduler: Scheduler,
     log: Logger[F]
   )
 
-  case class Time(value: Long) extends AnyVal
+  case class ClientConnection[F[_]](
+    subscriptions: State[F, Map[String, Interrupt[F]]],
+    redirectQueue: fs2.async.mutable.Queue[F, OutMessage],
+    requestQueue: fs2.async.mutable.Queue[F, KrRequest]
+  ) {
 
-  case class SubFeed[F[_]](
-                            subscriptions: State[F, Map[String, Interrupt[F]]],
-                            redirect: fs2.async.mutable.Queue[F, OutMessage],
-                            reqQueue: fs2.async.mutable.Queue[F, KrRequest]
-  )
+    def redirect(out: OutMessage): F[Unit] =
+      redirectQueue.enqueue1(out)
+
+    def request(request: KrRequest): F[Unit] =
+      requestQueue.enqueue1(request)
+  }
 
   case class Connection[F[_]](send: Stream[F, OutMessage], receive: Sink[F, ProtocolMessage])
 
@@ -61,16 +59,15 @@ object kratia_app {
   def KratiaInMem[F[_]](implicit timer: Timer[F], F: ConcurrentEffect[F], ec: ExecutionContext): Stream[F, Kratia[F]] =
     for {
       config <- Stream.eval(loadConfig[F])
-      memberStore <- Stream.eval(MemberStore.inMem[F])
-      membersTopic <- Stream.eval(MembersTopic[F])
-      communities <- Stream.eval(CommunitiesInMem[F])
-      scheduler <- Scheduler[F](corePoolSize = 2)
       apiLogger = ColorPrint[F]("kratia")
+      channels <- Stream.eval(KratiaChannels.inMem[F](apiLogger))
+      memberService <- Stream.eval(MemberService.inMem[F](channels))
+      communitiesService <- Stream.eval(CommunitiesService.inMem[F](channels))
+      scheduler <- Scheduler[F](corePoolSize = 2)
     } yield Kratia[F](
-      memberStore,
-      membersTopic,
-      communities,
-      timeStream[F](config),
+      channels,
+      memberService,
+      communitiesService,
       scheduler,
       apiLogger
     )
@@ -106,7 +103,7 @@ object kratia_app {
       requestsQueue <- fs2.async.unboundedQueue[F, KrRequest]
       redirectQueue <- fs2.async.unboundedQueue[F, OutMessage]
       subscriptions <- State.inMem[F, Map[String, Interrupt[F]]](Map.empty)
-      feed: SubFeed[F] = SubFeed[F](subscriptions, redirectQueue, requestsQueue)
+      feed: ClientConnection[F] = ClientConnection[F](subscriptions, redirectQueue, requestsQueue)
       send: Stream[F, OutMessage] = requestsQueue
         .dequeue.through(handleRequest)
         .merge(redirectQueue.dequeue)
@@ -118,46 +115,26 @@ object kratia_app {
   def handleRequest[F[_]](implicit kratia: Kratia[F], F: ConcurrentEffect[F], ec: ExecutionContext): Pipe[F, KrRequest, OutMessage] =
     _.evalMap {
       case Register(nickname) =>
-        Member.create[F](nickname)(kratia.memberStore, kratia.membersTopic)
-          .map[OutMessage](member => Registered(member))
+        kratia.members.create(nickname).map[OutMessage](member => Registered(member))
       case message =>
         kratia.log.info("Got: " + message)
           .map[OutMessage](_ => LogFromServer(message.toString))
     }
 
-  def handleInMessages[F[_]](feed: SubFeed[F])(implicit kratia: Kratia[F], F: ConcurrentEffect[F], ec: ExecutionContext): Sink[F, ProtocolMessage] =
+  def handleInMessages[F[_]](feed: ClientConnection[F])(implicit kratia: Kratia[F], F: ConcurrentEffect[F], ec: ExecutionContext): Sink[F, ProtocolMessage] =
     _.evalMap {
-        case Subscribe(topic) if topic == MembersTopic.NAME =>
-          subscribeInto[F](feed, topic, kratia.membersTopic.subscribeInto(feed.redirect))
         case Subscribe(topic) =>
-          feed.redirect.enqueue1(KratiaFailure(Status.BadRequest.code, "Invalid topic: " + topic))
+          kratia.channels.subscribe(topic, feed)
         case Unsubscribe(topic) =>
-          unsubscribeFrom(feed, topic)
+          kratia.channels.unsubscribe(topic, feed)
         case request: KrRequest =>
-          feed.reqQueue.enqueue1(request)
+          feed.request(request)
         case in: InMessage =>
           kratia.log.debug("Unsupported protocol message: " + in) *>
-            feed.redirect.enqueue1(LogFromServer("Unsupported protocol message :" + in))
+            feed.redirect(LogFromServer("Unsupported protocol message :" + in))
         case other =>
           kratia.log.debug("Received message out of protocol: " + other)
       }
-
-  def subscribeInto[F[_]](feed: SubFeed[F], name: String, subscribe: F[Interrupt[F]])(implicit F: Sync[F]): F[Unit] =
-    for {
-      unsubscribe <- subscribe
-      _ <- feed.subscriptions.update(_ + (name -> unsubscribe))
-    } yield ()
-
-  def unsubscribeFrom[F[_]](feed: SubFeed[F], name: String)(implicit F: Sync[F]): F[Unit] =
-    for {
-      unsubscribe <- feed.subscriptions.modify { subs =>
-        subs.get(name) match {
-          case Some(unsub) => (subs - name, unsub)
-          case None => (subs, F.unit)
-        }
-      }
-      _ <- unsubscribe
-    } yield ()
 
   def errorHandler[F[_]](implicit kratia: Kratia[F], F: ConcurrentEffect[F], ec: ExecutionContext): Pipe[F, OutMessage, OutMessage] =
     _.handleErrorWith {
@@ -203,10 +180,4 @@ object kratia_app {
   def encodeMessage[F[_]](implicit F: Sync[F]): Pipe[F, ProtocolMessage, WebSocketFrame] =
     _.map(ProtocolMessage.encoder.apply)
       .map(json => Text(json.noSpaces))
-
-  def timeStream[F[_]](config: KratiaConfig)(implicit timer: Timer[F], F: Sync[F]): Stream[F, Time] =
-    Stream
-      .duration[F]
-      .evalMap(_ => timer.clockMonotonic(MILLISECONDS))
-      .map(Time)
 }

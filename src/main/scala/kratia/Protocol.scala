@@ -2,10 +2,9 @@ package kratia
 
 import io.circe.{Decoder, DecodingFailure, Encoder, Json}
 import io.circe.generic.auto._
-import kratia.kratia_core_model.Member
-import kratia.members.members_auth.Secret
+import kratia.members.{Member, Secret}
 
-object kratia_protocol {
+object Protocol {
 
   sealed trait ProtocolMessage
 

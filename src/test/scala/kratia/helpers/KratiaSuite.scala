@@ -3,11 +3,10 @@ package kratia.helpers
 import cats.effect.{ConcurrentEffect, IO, Timer}
 import fs2.async.mutable.Queue
 import kratia.helpers.KratiaSuite.{Context, TestFailure}
-import kratia.kratia_app
-import kratia.kratia_app.{Connection, Kratia}
-import kratia.kratia_core_model.runWithInterrupt
-import kratia.kratia_protocol.{InMessage, OutMessage}
-import kratia.state.State
+import kratia.App
+import kratia.App.{Connection, Kratia}
+import kratia.Protocol.{InMessage, OutMessage}
+import kratia.utils._
 import org.scalatest.{Assertion, AsyncFunSuite}
 
 import scala.concurrent.Future
@@ -19,8 +18,8 @@ abstract class KratiaSuite extends AsyncFunSuite {
 
   def exec(f: Context => IO[Assertion]): Future[Assertion] =
     (for {
-      kratia <- kratia_app.KratiaInMem[IO].compile.toList
-      connection <- kratia_app.connect[IO](kratia.head, ConcurrentEffect[IO], executionContext)
+      kratia <- App.KratiaInMem[IO].compile.toList
+      connection <- App.connect[IO](kratia.head, ConcurrentEffect[IO], executionContext)
       testSendQueue <- fs2.async.unboundedQueue[IO, InMessage]
       receiveCache <- State.inMem[IO, List[OutMessage]](List.empty)
       interruptSend <- runWithInterrupt(testSendQueue.dequeue.to(connection.receive))

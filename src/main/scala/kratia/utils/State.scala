@@ -1,7 +1,7 @@
-package kratia.state
+package kratia.utils
 
-import cats.implicits._
 import cats.effect.Sync
+import cats.implicits._
 import fs2.async.Ref
 
 trait State[F[_], A] {
