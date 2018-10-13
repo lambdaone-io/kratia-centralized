@@ -140,11 +140,7 @@ object App {
     _.handleErrorWith {
       case failure: KratiaFailure =>
         Stream.emit(failure)
-        /*
-          .map(failure => ProtocolMessage.encoder(failure))
-          .observe(kratia.log.error)
-          .map(json => Text(json.noSpaces))
-        */
+          .observe(kratia.log.debug)
       case error =>
         Stream.emit(error)
           .observe(kratia.log.error)

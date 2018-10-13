@@ -1,5 +1,6 @@
 package kratia
 
+import cats.Show
 import io.circe.{Decoder, DecodingFailure, Encoder, Json}
 import io.circe.generic.auto._
 import kratia.members.{Member, Secret}
@@ -59,6 +60,12 @@ object Protocol {
         case message: KratiaEvent => encode[KratiaEvent]("event", message)
         case message: LogFromServer => encode[LogFromServer]("log_from_server", message)
       }
+
+    object KratiaFailure {
+
+      implicit val showKratiaFailure: Show[KratiaFailure] =
+        failure => s"[FAILURE ${failure.code}] ${failure.message}"
+    }
   }
 
 
