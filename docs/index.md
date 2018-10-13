@@ -22,6 +22,7 @@ Contents
 --------
 
 1. [The Basic Model](./the-basic-model.md)
-2. [Community Scaling](./community-scaling.md)
-3. [Evolution of a Community](./evolution-of-a-community.md)
-4. [Proposal Typing](./proposal-typing.md)
+2. [Decision System Functions Combinators](./decision-system-functions-combinators.md)
+3. [Community Scaling](./community-scaling.md)
+4. [Evolution of a Community](./evolution-of-a-community.md)
+5. [Proposal Typing](./proposal-typing.md)
