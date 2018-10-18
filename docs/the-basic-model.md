@@ -19,11 +19,11 @@ future section. Influence distribution and decision resolution are actually just
 called the **influence distribution function** and the **decision resolution function**, and
 these together are called the **decision system functions**.
 
-It is desired to have modular parts of the model, which when changed, the community's way of deciding changes, and subsequentially the community changes, these parts must be formalized or semi-formalized mathematically in order to have a full understanding of them, be able to reduce it to unambiguous code, be able to measure its impact, and be able to proof properties or extend them by providing ways of combining them and compose them. 
+It is desired to have modular parts of the model, which when changed, the community's way of deciding changes, and subsequentially the community changes, these parts must be formalized or semi-formalized mathematically in order to have a full understanding of them, to be able to reduce it to unambiguous code, measure its impact, and proof properties or extend them by providing ways of combination.
 
 This documentation will attempt to do such semi formalization of the parts of the model and will use the programming language Haskell as the chosen tool since it stands in between programmers and mathematicians. With this we would like to achieve some kind of denotational semantics, so to cater to the mathematical rigor as much as to the programming implementation and computational challenges.
 
-* Usage of tagless final
+The basic technique used in this documentation to be able to describe things without going into unnecessary specifics of the data or the technical implementation, is "tagless final", where Haskell's type classes help us decouple specification from implementation, leaving the former to this documentation, and the latter to the engineers who wish to write a Kratia Engine in any programming language.
 
 The first parts that we will semi formalize, are the concept of a community, a member and a registry, allowing us to continue with the decision system functions, which are of uttermost importance since they stand at the core of Kratia.
 
