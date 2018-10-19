@@ -44,7 +44,7 @@ class Registry f a where
 
   isMember :: Community a -> a -> f Bool
 
-  load :: Community a -> Address -> f (Maybe a)
+  load :: Community a -> Member a -> f (Maybe a)
 
   loadAll :: Community a -> f [a]
 ```
