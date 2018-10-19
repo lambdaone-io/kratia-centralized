@@ -51,17 +51,14 @@ class Registry f a where
 
 ## Influence Distribution
 
-When decisions are to be made, a community might want to have a notion of influence distribution, so that more capable or more affected individuals have more decision power over others. Given the set of members of a community `M` and a measurement of influence `Infl`, the influence distribution is a function that maps every member with its influence amount. 
-
-```haskell
-dist :: M -> Infl
-```
-
-* Required relation with our notion of community and registry
+This influence distribution function will indeed map every member of the community `M` into some notion of influence, but we need to connect it to our current models and code. To do so we take advantage of the parametrized `a` of `Member` and `Community`
 
 ```haskell
 type Influence = Rational
 
 class InfluenceDistribution f method where
-  alloc :: Registry f a => Community a -> a -> method -> f Influence
+  alloc :: Registry f a => Community a -> Member a -> method -> f Influence
 ```
+As you can see, `alloc` has a stronger restriction, it creates a relation between `Community`, `Member`, and a data type that parametrizes how the distribution will be made, i.e. a member `a` that we can extract from a community `Community a` with registry functions `Registry f a`. Such parametrized data type `method` will allow us to model different existing and nonexisting ways of distributing influence on a community.
+
+### Democracy
