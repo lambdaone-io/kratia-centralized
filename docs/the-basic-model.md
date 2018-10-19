@@ -29,15 +29,11 @@ The first parts that we will semi formalize, are the concept of a community, a m
 
 ## Member, Community, and the Registry
 
-* Community as a set of members
-* Importance of handling without loading all data 
-* Registry as a polymorphic operation
+A community may be easily defined as a set of members, and a registry as a mechanism for adding, removing, and authenticating members, also this mechanism is able to authorize these operations; in a future section we will explain that operations on this mechanism should only be triggered by a decision made through the meta-decision system of the community.
 
-The community can be delimited by the registry, which is the module that dictates membership, we will use a type class to describe the module.
+In order to better handle communities and members, we will create data models by reference, we use a data type that should represent a unique identifier for such models, in the same form UUIDs work for databases or hash addresses for blockchains. `Community` and `Member` are parametrized to represent the type of the members which are loaded into memory by using an operation on the registry.
 
 ```haskell
-{-# LANGUAGE MultiParamTypeClasses #-}
-
 type Address = String
 
 data Community a = CommunityRef Address
@@ -45,7 +41,12 @@ data Community a = CommunityRef Address
 data Member a = MemberRef Address
 
 class Registry f a where
+
   isMember :: Community a -> a -> f Bool
+
+  load :: Community a -> Address -> f (Maybe a)
+
+  loadAll :: Community a -> f [a]
 ```
 
 ## Influence Distribution
