@@ -80,3 +80,5 @@ instance Functor f => InfluenceDistribution f a Democratic where
     where doAllocation True = 1.0
           doAllocation False = 0.0
 ```
+
+This instance is giving the same amount of influence on each member recognized by the `Registry` class, arguably succesfully modeling the notion of pure democracy, where every member of a community has the same amount of saying on each decision. We are not using the `method` argument for much but to distinguish the class instance to be used. In the next example, we will change that.
