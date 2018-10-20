@@ -62,9 +62,21 @@ This influence distribution function will indeed map every member of the communi
 ```haskell
 type Influence = Rational
 
-class InfluenceDistribution f method where
-  alloc :: Registry f a => Community a -> Member a -> method -> f Influence
+class InfluenceDistribution f a method where
+  dist :: Registry f a => Community a -> Member a -> method -> f Influence
 ```
-As you can see, `alloc` has a stronger restriction, it creates a relation between `Community`, `Member`, and a data type that parametrizes how the distribution will be made, i.e. a member `a` that we can extract from a community `Community a` with registry functions `Registry f a`. Such parametrized data type `method` will allow us to model different existing and nonexisting ways of distributing influence on a community.
+
+As you can see, `dist` has a stronger restriction now, it creates a relation between `Community`, `Member`, and a data type that parametrizes how the distribution will be made, namely `method`, such data type will carry the context needed to make the influence distribution according to a specific method, and will allow us to model different existing and currently nonexisting ways of distributing influence on a community. Also, it is important to note the relationship created by the polymorphic type `a`, such type is the data of a `Member a` that we can extract from a community `Community a` using registry functions `Registry f a`.
 
 ### Democracy
+
+Given the class `InflueceDistribution`, now we have a simple dsl to model different distributions of influence, the simplest ones being democracy and totalitarianism since those are the 2 extremes of the distribution, i.e. all influence to one member or the same influence to each member. 
+
+```haskell
+data Democratic = Democratic
+
+instance Functor f => InfluenceDistribution f a Democratic where
+  alloc community member _ = fmap doAllocation (isMember community member)
+    where doAllocation True = 1.0
+          doAllocation False = 0.0
+```
