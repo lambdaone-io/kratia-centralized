@@ -51,6 +51,12 @@ class Registry f a where
 
 ## Influence Distribution
 
+When decisions are to be made, a community might need a notion of influence distribution, so that more capable or more affected individuals have more decision power over others. Given the set of members of a community `M` and a measurement of influence `Infl`, the influence distribution is a function that maps every member with its influence amount. 
+
+```haskell
+dist :: M -> Infl
+```
+
 This influence distribution function will indeed map every member of the community `M` into some notion of influence, but we need to connect it to our current models and code. To do so we take advantage of the parametrized `a` of `Member` and `Community`
 
 ```haskell
