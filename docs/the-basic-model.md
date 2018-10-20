@@ -42,7 +42,7 @@ data Member a = MemberRef Address
 
 class Registry f a where
 
-  isMember :: Community a -> a -> f Bool
+  isMember :: Community a -> Member a -> f Bool
 
   load :: Community a -> Member a -> f (Maybe a)
 
