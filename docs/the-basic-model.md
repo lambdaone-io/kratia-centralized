@@ -82,3 +82,13 @@ instance Functor f => InfluenceDistribution f a Democratic where
 ```
 
 This instance is giving the same amount of influence on each member recognized by the `Registry` class, arguably succesfully modeling the notion of pure democracy, where every member of a community has the same amount of saying on each decision. We are not using the `method` argument for much but to distinguish the class instance to be used. In the next example, we will change that.
+
+### Totalitarianism
+Modeling totalitarianism is rather straightforward as well. On this implementation we removed the membership check, showing that there can be influence distribution functions which allocate influence to non-members of the community. Also, we are introducing the usage of `method` as a way to add context to the allocation of influence, in this case, to identify the member that will be granted all the influence.
+
+```haskell
+data Totalitarian a = Dictator (Member a)
+
+instance Applicative f => InfluenceDistribution f a (Totalitarian a) where
+  dist _ member (Dictator dic) = pure $ if member == dic then 1.0 else 0.0
+```
