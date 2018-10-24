@@ -23,7 +23,7 @@ scaling, composition and combination of complex decision systems, open data for 
 ## General Architecture of the Algebras
 
 Each one of these boxes represent the algebras of a decision system, and how they relate to each other.
-This is a high level of the relationship between the operations and the objects, but the code should
+This is a high level representation of the relationship between the operations and the objects, but the code should
 still have a strong resemblance to these types.
 
 `Protocol[F[_]]`, `Registry[F[_], A]`, `Collector[F[_], P]`, `InfluenceDistributionFunction[F[_], A]`,
