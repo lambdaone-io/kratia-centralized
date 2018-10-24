@@ -1,7 +1,7 @@
 Kratia
 ======
 
-**The documentation has been moved to [kratia-model](https://github.com/lambdaone-io/kratia-model)**
+**The semiformalized model has been moved to [kratia-model](https://github.com/lambdaone-io/kratia-model)**
 
 _Kratia is a model, and an implementation of the model is called a kratia-engine._
 
