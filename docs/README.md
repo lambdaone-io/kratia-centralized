@@ -28,7 +28,7 @@ still have a strong resemblance to these types.
 
 `Protocol[F[_]]`, `Registry[F[_], A]`, `Collector[F[_], P]`, `InfluenceDistributionFunction[F[_], A]`,
 `DecisionResolutionFunction[F[_], P]` should be type classes which define the operators which define the
-algebras. `Community[A]`, Member[A]`, `Vote[A, P]`, `BallotBox[P]`, `VotingResult[P]` are objects that are manipulated by
+algebras, these type classes are parametrized on the effect type `F[_]` to follow the added restrictions used in the tagless final design technique. `Community[A]`, `Member[A]`, `Vote[A, P]`, `BallotBox[P]`, `VotingResult[P]` are objects that are manipulated by
 the operators on the previously mentioned type classes.
 
 ![Kratia General Architecture](./images/kratia-engine-general-architecture.png)
