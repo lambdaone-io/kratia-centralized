@@ -33,3 +33,4 @@ the operators on the previously mentioned type classes.
 
 ![Kratia General Architecture](./images/kratia-engine-general-architecture.png)
 
+_Tip! If the text is too small, click on the image and then on download, it will give you the full sized diagram._
