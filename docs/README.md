@@ -19,3 +19,17 @@ There are several exciting industries which would benefit: open software project
 digital nomad groups, small and big companies, NGOs, distributed autonomous organizations, governments. 
 Also exciting possible features: webhooks for automation, automatic transparency, sub-communities for 
 scaling, composition and combination of complex decision systems, open data for research on governance systems.
+
+## General Architecture of the Algebras
+
+Each one of these boxes represent the algebras of a decision system, and how they relate to each other.
+This is a high level of the relationship between the operations and the objects, but the code should
+still have a strong resemblance to these types.
+
+`Protocol[F[_]]`, `Registry[F[_], A]`, `Collector[F[_], P]`, `InfluenceDistributionFunction[F[_], A]`,
+`DecisionResolutionFunction[F[_], P]` should be type classes which define the operators which define the
+algebras. `Community[A]`, Member[A]`, `Vote[A, P]`, `BallotBox[P]`, `VotingResult[P]` are objects that are manipulated by
+the operators on the previously mentioned type classes.
+
+![Kratia General Architecture](./images/kratia-engine-general-architecture.png)
+
