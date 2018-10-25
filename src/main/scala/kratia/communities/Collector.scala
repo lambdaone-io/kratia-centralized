@@ -9,7 +9,8 @@ import kratia.communities.Collector._
 import kratia.Protocol.ProtocolMessage.KratiaFailure
 import kratia.communities.Community.{Decision, DecisionAction, Vote}
 import kratia.members.Member
-import kratia.utils.{Address, State}
+import kratia.utils.Address
+import lambdaone.toolbox.State
 import org.http4s.Status
 
 class Collector[F[_]](
