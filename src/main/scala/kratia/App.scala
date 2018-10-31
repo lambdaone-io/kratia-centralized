@@ -1,22 +1,24 @@
 package kratia
 
 import cats.Show
-import fs2.{Pipe, Scheduler, Sink, Stream}
+import fs2.{Pipe, Sink, Stream}
 import cats.implicits._
 import cats.effect.{ConcurrentEffect, Sync, Timer}
 import org.http4s.{HttpService, StaticFile, Status}
 import kratia.Configuration._
 import kratia.Protocol.{InMessage, KrRequest, OutMessage, ProtocolMessage}
-import kratia.utils.{Interrupt, KratiaChannels, Logger, State}
+import kratia.utils.{Interrupt, KratiaChannels, Logger}
 import org.http4s.dsl.Http4sDsl
 import org.http4s.server.websocket.WebSocketBuilder
-import org.http4s.websocket.WebsocketBits.{Text, WebSocketFrame}
 import io.circe.parser.parse
 import io.circe.Json
 import kratia.Protocol.ProtocolMessage.{KratiaFailure, LogFromServer, Register, Registered, Subscribe, Unsubscribe}
 import kratia.communities.CommunitiesService
 import kratia.members.MemberService
 import kratia.utils.Logger.ColorPrint
+import lambdaone.toolbox.State
+import org.http4s.websocket.WebSocketFrame
+import org.http4s.websocket.WebSocketFrame.Text
 
 import scala.concurrent.ExecutionContext
 
@@ -28,14 +30,13 @@ object App {
     channels: KratiaChannels[F],
     members: MemberService[F],
     communities: CommunitiesService[F],
-    scheduler: Scheduler,
     log: Logger[F]
   )
 
   case class ClientConnection[F[_]](
     subscriptions: State[F, Map[String, Interrupt[F]]],
-    redirectQueue: fs2.async.mutable.Queue[F, OutMessage],
-    requestQueue: fs2.async.mutable.Queue[F, KrRequest]
+    redirectQueue: fs2.concurrent.Queue[F, OutMessage],
+    requestQueue: fs2.concurrent.Queue[F, KrRequest]
   ) {
 
     def redirect(out: OutMessage): F[Unit] =
@@ -53,7 +54,6 @@ object App {
   implicit val showJson: Show[Json] =
     json => json.spaces2
 
-
   /** Functions */
 
   def KratiaInMem[F[_]](implicit timer: Timer[F], F: ConcurrentEffect[F], ec: ExecutionContext): Stream[F, Kratia[F]] =
@@ -63,26 +63,12 @@ object App {
       channels <- Stream.eval(KratiaChannels.inMem[F](apiLogger))
       memberService <- Stream.eval(MemberService.inMem[F](channels))
       communitiesService <- Stream.eval(CommunitiesService.inMem[F](channels))
-      scheduler <- Scheduler[F](corePoolSize = 2)
     } yield Kratia[F](
       channels,
       memberService,
       communitiesService,
-      scheduler,
       apiLogger
     )
-
-  def KratiaStaticFiles[F[_]](dsl: Http4sDsl[F])(implicit F: ConcurrentEffect[F], ec: ExecutionContext): HttpService[F] = {
-    import dsl._
-    HttpService[F] {
-
-      case request @ GET -> Root =>
-        StaticFile.fromResource("/static/index.html", Some(request)).getOrElseF(NotFound())
-
-      case request @ GET -> "static" /: path =>
-        StaticFile.fromResource("/static" + path.toString, Some(request)).getOrElseF(NotFound())
-    }
-  }
 
   def KratiaBroker[F[_]](dsl: Http4sDsl[F], kratia: Kratia[F])(implicit F: ConcurrentEffect[F], ec: ExecutionContext): HttpService[F] = {
     import dsl._
@@ -100,8 +86,8 @@ object App {
 
   def connect[F[_]](implicit kratia: Kratia[F], F: ConcurrentEffect[F], ec: ExecutionContext): F[Connection[F]] = {
     for {
-      requestsQueue <- fs2.async.unboundedQueue[F, KrRequest]
-      redirectQueue <- fs2.async.unboundedQueue[F, OutMessage]
+      requestsQueue <- fs2.concurrent.Queue.unbounded[F, KrRequest]
+      redirectQueue <- fs2.concurrent.Queue.unbounded[F, OutMessage]
       subscriptions <- State.inMem[F, Map[String, Interrupt[F]]](Map.empty)
       feed: ClientConnection[F] = ClientConnection[F](subscriptions, redirectQueue, requestsQueue)
       send: Stream[F, OutMessage] = requestsQueue
@@ -137,6 +123,8 @@ object App {
       }
 
   def errorHandler[F[_]](implicit kratia: Kratia[F], F: ConcurrentEffect[F], ec: ExecutionContext): Pipe[F, OutMessage, OutMessage] =
+    ???
+  /*
     _.handleErrorWith {
       case failure: KratiaFailure =>
         Stream.emit(failure)
@@ -146,19 +134,22 @@ object App {
           .observe(kratia.log.error)
           .map(_ => KratiaFailure(Status.InternalServerError.code, "Something went wrong on our side, please try again."))
     }
+    */
 
   def decodeMessage[F[_]](implicit kratia: Kratia[F], F: Sync[F]): Pipe[F, WebSocketFrame, ProtocolMessage] =
+    ???
+    /*
     _.flatMap {
       case Text((text, true)) =>
         Stream.emit(text)
       case _ =>
-        Stream.raiseError[String](KratiaFailure(Status.BadRequest.code, "Messages need to be encoded in json format and fit in 1 frame."))
+        Stream.raiseError(KratiaFailure(Status.BadRequest.code, "Messages need to be encoded in json format and fit in 1 frame."))
     }
       .map(parse)
       .flatMap {
         case Left(failure) =>
           Stream.eval(kratia.log.debug("Failed to parse message from client: " + failure)).flatMap { _ =>
-            Stream.raiseError[Json](KratiaFailure(Status.BadRequest.code, "Message is text but not json."))
+            Stream.raiseError(KratiaFailure(Status.BadRequest.code, "Message is text but not json."))
           }
         case Right(json) =>
           Stream.emit(json)
@@ -167,11 +158,12 @@ object App {
       .flatMap {
         case Left(failure) =>
           Stream.eval(kratia.log.debug("Failed to decode message from client: " + failure)).flatMap { _ =>
-            Stream.raiseError[InMessage](KratiaFailure(Status.BadRequest.code, "What are you talking about?"))
+            Stream.raiseError(KratiaFailure(Status.BadRequest.code, "What are you talking about?"))
           }
         case Right(message) =>
           Stream.emit(message)
       }
+      */
 
   def encodeMessage[F[_]](implicit F: Sync[F]): Pipe[F, ProtocolMessage, WebSocketFrame] =
     _.map(ProtocolMessage.encoder.apply)

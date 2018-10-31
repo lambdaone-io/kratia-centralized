@@ -1,7 +1,7 @@
 package kratia.communities
 
 import cats.implicits._
-import cats.effect.{Effect, Sync}
+import cats.effect.{Concurrent, Effect, Sync}
 import io.circe.generic.auto._
 import io.circe.syntax._
 import io.circe.Json
@@ -18,7 +18,7 @@ case class CommunitiesChannel[F[_]](channel: EventChannel[F, CommunitiesEvents])
 
 object CommunitiesChannel {
 
-  def apply[F[_]](channels: KratiaChannels[F])(implicit F: Effect[F], ec: ExecutionContext): F[CommunitiesChannel[F]] =
+  def apply[F[_]](channels: KratiaChannels[F])(implicit F: Concurrent[F]): F[CommunitiesChannel[F]] =
     for {
       channel <- EventChannel[F, CommunitiesEvents]("communities", CommunitiesEvents.CommunitiesBooted) {
         case CommunitiesBooted => ("communities_booted", Json.Null)

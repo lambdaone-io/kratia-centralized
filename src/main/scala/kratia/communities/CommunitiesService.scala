@@ -1,15 +1,16 @@
 package kratia.communities
 
 import cats.implicits._
-import cats.effect.{ConcurrentEffect, Effect, Sync}
+import cats.effect.{ConcurrentEffect, Effect, Concurrent}
 import kratia.communities.Community._
-import kratia.utils.{Address, KratiaChannels, State, Store}
+import kratia.utils.{Address, KratiaChannels}
+import lambdaone.toolbox.{State, Store}
 
 import scala.concurrent.ExecutionContext
 
 case class CommunitiesService[F[_]](store: Store[F, Community[F]], events: CommunitiesChannel[F]) {
 
-  def create(name: String, channels: KratiaChannels[F])(implicit F: ConcurrentEffect[F], ec: ExecutionContext): F[Community[F]] =
+  def create(name: String, channels: KratiaChannels[F])(implicit F: ConcurrentEffect[F]): F[Community[F]] =
     for {
       address <- Address.gen[F]
       membersStore <- Store.inMem[F, Address]
@@ -25,7 +26,7 @@ case class CommunitiesService[F[_]](store: Store[F, Community[F]], events: Commu
 
 object CommunitiesService {
 
-  def inMem[F[_]](channels: KratiaChannels[F])(implicit F: Effect[F], ec: ExecutionContext): F[CommunitiesService[F]] =
+  def inMem[F[_]](channels: KratiaChannels[F])(implicit F: Concurrent[F]): F[CommunitiesService[F]] =
     for {
       communitiesStore <- Store.inMem[F, Community[F]]
       channel <- CommunitiesChannel[F](channels)

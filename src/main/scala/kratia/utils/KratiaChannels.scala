@@ -5,6 +5,7 @@ import cats.implicits._
 import cats.effect.{ConcurrentEffect, Effect, Sync}
 import kratia.App.ClientConnection
 import kratia.Protocol.ProtocolMessage.KratiaFailure
+import lambdaone.toolbox.State
 
 import scala.concurrent.ExecutionContext
 

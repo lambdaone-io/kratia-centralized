@@ -7,7 +7,8 @@ import kratia.Protocol.ProtocolMessage.KratiaFailure
 import kratia.communities.Community._
 import kratia.communities.Collector._
 import kratia.members.Member
-import kratia.utils.{Address, State, Store}
+import kratia.utils.Address
+import lambdaone.toolbox.{State, Store}
 import org.http4s.Status
 
 case class Community[F[_]](

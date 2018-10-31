@@ -8,6 +8,7 @@ import scala.concurrent.duration._
 
 class MemberManagementSpec extends KratiaSuite {
 
+  /*
   test("Register user simple") {
     exec { context =>
       for {
@@ -40,4 +41,5 @@ class MemberManagementSpec extends KratiaSuite {
       }
     }
   }
+  */
 }

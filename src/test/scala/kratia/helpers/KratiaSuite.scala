@@ -1,12 +1,12 @@
 package kratia.helpers
 
 import cats.effect.{ConcurrentEffect, IO, Timer}
-import fs2.async.mutable.Queue
+import fs2.concurrent.Queue
 import kratia.helpers.KratiaSuite.{Context, TestFailure}
 import kratia.App
-import kratia.App.{Connection, Kratia}
 import kratia.Protocol.{InMessage, OutMessage}
 import kratia.utils._
+import lambdaone.toolbox.State
 import org.scalatest.{Assertion, AsyncFunSuite}
 
 import scala.concurrent.Future
@@ -16,6 +16,7 @@ abstract class KratiaSuite extends AsyncFunSuite {
 
   implicit val timer: Timer[IO] = IO.timer(executionContext)
 
+  /*
   def exec(f: Context => IO[Assertion]): Future[Assertion] =
     (for {
       kratia <- App.KratiaInMem[IO].compile.toList
@@ -35,6 +36,7 @@ abstract class KratiaSuite extends AsyncFunSuite {
       case Left(e) => Future.failed(e)
       case Right(a) => Future.successful(a)
     }
+    */
 }
 
 object KratiaSuite {

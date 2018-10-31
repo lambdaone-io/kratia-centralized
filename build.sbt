@@ -1,8 +1,8 @@
 name := "kratia-centralized"
 
-description := "Centralized version of the Kratia platform."
+description := "Centralized version of a Kratia Engine."
 
-scalaVersion := "2.12.6"
+scalaVersion := "2.12.7"
 
 scalacOptions ++= Seq(
   "-feature",
@@ -12,9 +12,9 @@ scalacOptions ++= Seq(
   "-Ypartial-unification"
 )
 
-lazy val http4s = "0.18.17"
+lazy val http4s = "0.19.0-M4"
 
-lazy val circe = "0.9.3"
+lazy val circe = "0.10.0"
 
 libraryDependencies ++= List(
   "com.typesafe" % "config" % "1.3.2",

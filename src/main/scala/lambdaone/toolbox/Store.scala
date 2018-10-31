@@ -1,10 +1,11 @@
-package kratia.utils
+package lambdaone.toolbox
 
 import java.util.UUID
 
 import cats.effect.Sync
 import cats.implicits._
 import cats.{Functor, Monad, MonadError}
+import kratia.utils.Instance
 
 trait Store[F[_], A] {
 

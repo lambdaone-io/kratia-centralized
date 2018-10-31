@@ -1,8 +1,8 @@
 package kratia.utils
 
 import cats.implicits._
-import cats.effect.{ConcurrentEffect, Effect, Sync}
-import fs2.async.mutable.{Queue, Topic}
+import cats.effect.{Concurrent, ConcurrentEffect, Effect, Sync}
+import fs2.concurrent.{Queue, Topic}
 import io.circe.Json
 import kratia.App.ClientConnection
 import kratia.Protocol.OutMessage
@@ -44,7 +44,7 @@ case class EventChannel[F[_], -E](name: String, channel: Topic[F, OutMessage], p
 
 object EventChannel {
 
-  def apply[F[_], E](name: String, initial: E)(payload: E => (String, Json))(implicit F: Effect[F], ec: ExecutionContext): F[EventChannel[F, E]] = {
+  def apply[F[_], E](name: String, initial: E)(payload: E => (String, Json))(implicit F: Concurrent[F]): F[EventChannel[F, E]] = {
     val (eventName, body) = payload(initial)
     Topic[F, OutMessage](KratiaEvent(name, eventName, body)).map { channel =>
       new EventChannel[F, E](name, channel, payload)
