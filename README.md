@@ -1,3 +1,5 @@
+[![Waffle.io - Columns and their card count](https://badge.waffle.io/lambdaone-io/kratia-centralized.svg?columns=all)](https://waffle.io/lambdaone-io/kratia-centralized)
+
 # Kratia Engine Centralized
 
 _Kratia is a model, and an implementation of the model is called a kratia engine._
