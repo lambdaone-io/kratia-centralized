@@ -7,7 +7,7 @@ import kratia.App
 import kratia.App.{Connection, Kratia}
 import kratia.Protocol.{InMessage, OutMessage}
 import kratia.utils._
-import lambdaone.toolbox.State
+import lambdaone.toolbox.StateMonad
 import org.scalatest.{Assertion, AsyncFunSuite}
 
 import scala.concurrent.Future
@@ -50,7 +50,7 @@ object KratiaSuite {
                       kratia: Kratia[IO],
                       connection: Connection[IO],
                       testSendQueue: Queue[IO, InMessage],
-                      receiveCache: State[IO, List[OutMessage]]
+                      receiveCache: StateMonad[IO, List[OutMessage]]
                     )(implicit timer: Timer[IO]) {
 
     def ! (message: InMessage): IO[Unit] =

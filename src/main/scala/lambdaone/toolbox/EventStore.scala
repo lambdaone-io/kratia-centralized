@@ -1,60 +1,34 @@
 package lambdaone.toolbox
 
-import cats.data.NonEmptyList
-import cats.effect.Sync
-import cats.effect.concurrent.Ref
-import cats.implicits._
+import fs2.Stream
+import fs2.concurrent.Queue
 
 trait EventStore[F[_], A] {
 
-  def append(a: A): F[A]
+  def emit(event: A): F[Unit]
 
-  def latest: F[A]
+  def load: F[List[A]]
 
-  def loadAll: F[NonEmptyList[A]]
-
-  // Scan from earliest to latest
-  def find(f: A => Boolean): F[Option[A]]
-
-  def findMap[B](pf: PartialFunction[A, B]): F[Option[B]]
-
-  def filterMap[B](pf: PartialFunction[A, B]): F[List[B]]
+  def listen: Stream[F, A]
 }
 
 object EventStore {
 
-  def inMem[F[_], A](first: A)(implicit F: Sync[F]): F[EventStore[F, A]] =
-    Ref.of[F, NonEmptyList[A]](NonEmptyList.of(first)).map { ref =>
+  implicit def eventStoreReference[F[_], A](implicit store: StateMonad[F, (List[A], Queue[F, A])]): EventStore[F, A] =
+    new EventStoreReference(store)
+}
 
-      new EventStore[F, A] {
+class EventStoreReference[F[_], A] private[toolbox] (store: StateMonad[F, (List[A], Queue[F, A])]) extends EventStore[F, A] {
 
-        override def append(a: A): F[A] =
-          ref.modify(nel => (nel.append(a), a))
+  override def emit(event: A): F[Unit] =
+    store.modify { case (xs, queue) => (event :: xs) -> queue }
 
-        override def latest: F[A] =
-          ref.get.map(_.head)
+  override def load: F[List[A]] =
+    store.map(store.get)(_._1)
 
-        override def loadAll: F[NonEmptyList[A]] =
-          ref.get
-
-        override def find(f: A => Boolean): F[Option[A]] =
-          ref.get.map(_.find(f))
-
-        override def findMap[B](pf: PartialFunction[A, B]): F[Option[B]] =
-          ref.get.map { nel =>
-            nel.foldLeft(None: Option[B]) { (_, a) =>
-              if (pf.isDefinedAt(a)) Some(pf(a))
-              else None
-            }
-          }
-
-        override def filterMap[B](pf: PartialFunction[A, B]): F[List[B]] =
-          ref.get.map { nel =>
-            nel.foldLeft(Nil: List[B]) { (acc, a) =>
-              if (pf.isDefinedAt(a)) acc :+ pf(a)
-              else acc
-            }
-          }
-      }
-    }
+  override def listen: Stream[F, A] =
+    for {
+      queue <- Stream.eval[F, Queue[F, A]](store.map(store.get)(_._2))
+      event <- queue.dequeue
+    } yield event
 }

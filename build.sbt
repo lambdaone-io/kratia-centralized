@@ -27,4 +27,7 @@ libraryDependencies ++= List(
   "org.scalatest" %% "scalatest" % "3.0.4" % "test",
 )
 
+resolvers += Resolver.sonatypeRepo("releases")
+
+addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.8")
 addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)

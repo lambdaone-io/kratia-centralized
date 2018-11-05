@@ -1,3 +1,3 @@
 package lambdaone.kratia.registry
 
-case class Member[A](address: Address)
+case class Member[Address, Data](address: Address)
