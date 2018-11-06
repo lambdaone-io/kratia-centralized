@@ -1,7 +1,9 @@
 package lambdaone.toolbox
 
+import cats.data.State
 import cats.implicits._
-import cats.{Functor, Monad, MonadError, ~>}
+import cats.{Functor, Id, Monad, MonadError, ~>}
+import lambdaone.toolbox.UniqueGen.{UniqueGenReference, UniqueInt}
 
 /** CRUD operations based on a type for identifying data (like UUID or a hash) to store some data A
   *
@@ -60,18 +62,50 @@ trait CRUDStore[F[_], I, A] {
 
 object CRUDStore {
 
-  //implicit def fromG[F[_], G[_], I, A](implicit map: G ~> F, impl: Store[G, I, A]): Store[F, I, A]
+  type CRUDStoreReference[S, A] = State[(Map[Int, S], UniqueInt), A]
 
-  implicit def storeReference[F[_]: Monad, G[_]: Monad, I, A](implicit idGen: UniqueGen[G, I], runGen: G ~> F, state: StateMonad[F, Map[I, A]]): CRUDStore[F, I, A] =
-    new CRUDStoreReference[F, G, I, A](idGen, runGen, state)
+  implicit def referenceInterpreter[S]: Interpreter[CRUDStore[?, Int, S], CRUDStoreReference[S, ?], Id] =
+    new Interpreter[CRUDStore[?, Int, S], CRUDStoreReference[S, ?], Id] {
+
+      implicit val idGenInterpreter: Interpreter[UniqueGen[?, UniqueInt], UniqueGenReference, CRUDStoreReference[S, ?]] =
+        new Interpreter[UniqueGen[?, UniqueInt], UniqueGenReference, CRUDStoreReference[S, ?]] {
+
+          override def algebra: UniqueGen[UniqueGenReference, UniqueInt] =
+            UniqueGen.uniqueGenFromStateMonad[UniqueGenReference]
+
+          override def interpret: UniqueGenReference ~> CRUDStoreReference[S, ?] =
+            new (UniqueGenReference ~> CRUDStoreReference[S, ?]) {
+              override def apply[A](fa: UniqueGenReference[A]): CRUDStoreReference[S, A] =
+                fa.contramap[(Map[Int, S], UniqueInt)](_._2)
+            }
+
+        }
+
+      override def algebra: CRUDStore[CRUDStoreReference[S, ?], Int, S] =
+        CRUDStore[CRUDStoreReference[S, ?], Int, S]
+
+      override def interpret: CRUDStoreReference[S, ?] ~> Id =
+        new (CRUDStoreReference[S, ?] ~> Id) {
+          override def apply[A](fa: CRUDStoreReference[S, A]): Id[A] = fa.run((Map.empty, UniqueInt(0))).value._2
+        }
+    }
+
+  def apply[F[_], I, A](implicit store: CRUDStore[F, I, A]): CRUDStore[F, I, A] = store
+
+  implicit def storeFromStateMonad[F[_]: Monad, UniqueGenF[_]: Monad, I, A](
+    implicit
+    idGen: Interpreter[UniqueGen[?, I], UniqueGenF, F],
+    state: StateMonad[F, Map[I, A]]
+  ): CRUDStore[F, I, A] =
+    new CRUDFromStateMonad[F, UniqueGenF, I, A](idGen, state)
 }
 
-class CRUDStoreReference[F[_]: Monad, G[_]: Monad, I, A] private[toolbox](idGen: UniqueGen[G, I], runGen: G ~> F, state: StateMonad[F, Map[I, A]]) extends CRUDStore[F, I, A] {
+class CRUDFromStateMonad[F[_]: Monad, UniqueGenF[_]: Monad, I, A] private[toolbox](idGen: Interpreter[UniqueGen[?, I], UniqueGenF, F], state: StateMonad[F, Map[I, A]]) extends CRUDStore[F, I, A] {
 
   /** Stores `a` and produces a new unique reference */
   override def create(a: A): F[I] =
     for {
-      newId <- runGen(idGen.gen)
+      newId <- idGen.run(_.gen)
       _ <- state.modify(_ + (newId -> a))
     } yield newId
 
