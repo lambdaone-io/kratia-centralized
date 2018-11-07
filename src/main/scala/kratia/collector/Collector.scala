@@ -12,7 +12,7 @@ trait Collector[F[_], P] {
 
   def create(ballot: Ballot[P]): F[BallotBox[P]]
 
-  def vote(member: Member, vote: Vote)(implicit F: Sync[F]): F[ProofOfVote]
+  def vote(member: Member, vote: Vote[P])(implicit F: Sync[F]): F[ProofOfVote]
 
   def validateVote(proofOfVote: ProofOfVote)(implicit F: Functor[F]): F[Boolean]
 
