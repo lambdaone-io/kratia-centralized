@@ -15,9 +15,10 @@ trait CRUDStoreTests[F[_], I, A] extends Laws {
     new DefaultRuleSet(
       "crud",
       None,
+      "fetching" -> forAll(laws.fetching _),
       "creation" -> forAll(laws.creation _),
       "deletion" -> forAll(laws.deletion _),
-      "nonDestructiveUpdates" -> forAll(laws.nonDestructiveUpdates _)
+      "updates" -> forAll(laws.updates _)
     )
 }
 

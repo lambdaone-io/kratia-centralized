@@ -12,7 +12,7 @@ trait CRUDStoreLaws[F[_], I, A] {
 
   def interpret: F ~> Id
 
-  def get(xs: List[A])(implicit F: Monad[F], ordering: Ordering[A]): IsEq[List[Option[A]]] = {
+  def fetching(xs: List[A])(implicit F: Monad[F], ordering: Ordering[A]): IsEq[List[Option[A]]] = {
     val program: F[List[Option[A]]] =
       xs.traverse(crud.create) >>= (_.traverse(crud.get))
     interpret(program).sorted <-> xs.sorted.map(Option.apply)

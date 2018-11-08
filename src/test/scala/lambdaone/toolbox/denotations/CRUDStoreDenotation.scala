@@ -56,7 +56,7 @@ class CRUDStoreDenotation[I, A] extends CRUDStore[Denotation[I, A, ?], I, A] {
     State { case (s, i, g) =>
       s.get(id) match {
         case None => (s, i, g) -> None
-        case Some(a) => (s + (id -> a), i, g) -> Some(a)
+        case Some(a) => (s + (id -> a), i, g) -> Some(f(a))
       }
     }
 
