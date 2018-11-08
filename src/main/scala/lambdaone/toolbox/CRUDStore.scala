@@ -48,10 +48,12 @@ trait CRUDStore[F[_], I, A] {
   def all: F[List[A]]
 
   /** Returns true if data with such reference exists in the store */
-  def exists(id: I): F[Boolean]
+  def exists(id: I)(implicit F: Functor[F]): F[Boolean] =
+    get(id).map(_.isDefined)
 
   /** Selection of a subset of the data */
-  def filter(f: A => Boolean): F[List[A]]
+  def filter(f: A => Boolean)(implicit F: Functor[F]): F[List[A]] =
+    all.map(_.filter(f))
 
   /** Delete and ignore result */
   def delete_(id: I)(implicit F: Functor[F]): F[Unit] =

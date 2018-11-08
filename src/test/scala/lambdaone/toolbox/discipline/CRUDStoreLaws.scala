@@ -12,28 +12,28 @@ trait CRUDStoreLaws[F[_], I, A] {
 
   def interpret: F ~> Id
 
+  def get(xs: List[A])(implicit F: Monad[F], ordering: Ordering[A]): IsEq[List[Option[A]]] = {
+    val program: F[List[Option[A]]] =
+      xs.traverse(crud.create) >>= (_.traverse(crud.get))
+    interpret(program).sorted <-> xs.sorted.map(Option.apply)
+  }
+
   def creation(xs: List[A])(implicit F: Monad[F], ordering: Ordering[A]): IsEq[List[A]] = {
     val program: F[List[A]] =
-      xs.traverse(crud.create) *> crud.all.map(_.toList)
+      xs.traverse(crud.create) *> crud.all
     interpret(program).sorted <-> xs.sorted
   }
 
-  def deletion(a: A)(implicit F: Monad[F]): IsEq[List[Option[A]]] = {
-    val program: F[List[Option[A]]] = for {
-      id <- crud.create(a)
-      optA0 <- crud.get(id)
-      optA1 <- crud.delete(id)
-      all <- crud.all
-    } yield List(optA0, optA1) ++ all.map(Option.apply)
-    interpret(program) <-> List(Some(a), Some(a))
+  def deletion(xs: List[A])(implicit F: Monad[F], ordering: Ordering[A]): IsEq[List[Option[A]]] = {
+    val program: F[List[Option[A]]] =
+      xs.traverse(crud.create) >>= (_.traverse(crud.delete))
+    interpret(program).sorted <-> xs.sorted.map(Option.apply)
   }
 
-  def nonDestructiveUpdates(xs: List[A])(implicit F: Monad[F], monoid: Monoid[A], ordering: Ordering[A]): IsEq[List[Option[A]]] = {
-    val program: F[List[Option[A]]] = for {
-      ids <- xs.traverse(crud.create)
-      updates <- ids.traverse(crud.update(_)(_ |+| monoid.empty))
-    } yield updates
-    interpret(program).sorted <-> xs.map(Option.apply).sorted
+  def updates(xs: List[A])(implicit F: Monad[F], ordering: Ordering[A], monoid: Monoid[A]): IsEq[List[Option[A]]] = {
+    val program: F[List[Option[A]]] =
+      xs.traverse(crud.create) >>= (_.traverse(crud.update(_)(a => a |+| a)))
+    interpret(program).sorted <-> xs.sorted.map(a => Option(a |+| a))
   }
 }
 

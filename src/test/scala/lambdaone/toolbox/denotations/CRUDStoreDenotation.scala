@@ -72,12 +72,4 @@ class CRUDStoreDenotation[I, A] extends CRUDStore[Denotation[I, A, ?], I, A] {
   /** Returns all data within the store */
   override def all: Denotation[I, A, List[A]] =
     State.inspect { case (s, _, _) => s.values.toList }
-
-  /** Returns true if data with such reference exists in the store */
-  override def exists(id: I): Denotation[I, A, Boolean] =
-    State.inspect { case (s, _, _) => s.contains(id) }
-
-  /** Selection of a subset of the data */
-  override def filter(f: A => Boolean): Denotation[I, A, List[A]] =
-    all.map(_.filter(f))
 }

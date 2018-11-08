@@ -24,7 +24,7 @@ object Registry {
       new RegistryCQRS(event, query)
 }
 
-class RegistryCQRS[F[_], A, D] private[registry](
+class RegistryCQRS[F[_]: Monad, A, D] private[registry](
     event: EventStore[F, RegistryEvent],
     query: CRUDStore[F, (A, A), D],
   ) extends Registry[F, A, D] {
