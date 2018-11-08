@@ -1,7 +1,14 @@
 package lambdaone.kratia.registry
 
 import cats.Monad
+import cats.implicits._
 import lambdaone.toolbox.{CRUDStore, EventStore}
+
+object Registry {
+
+  implicit def apply[F[_]: Monad, A, D](implicit query: CRUDStore[F, (A, A), D]): Registry[F, A, D] =
+    new RegistryCRUD[F, A, D](query)
+}
 
 trait Registry[F[_], A, D] {
 
@@ -14,17 +21,15 @@ trait Registry[F[_], A, D] {
   def register(community: Community[A, D], member: Member[A, D], data: D): F[Unit]
 }
 
-object Registry {
+object RegistryCQRS {
 
-  implicit def registryCQRS[F[_]: Monad, A, D](
-      implicit
-      event: EventStore[F, RegistryEvent],
-      query: CRUDStore[F, (A, A), D],
-    ): Registry[F, A, D] =
-      new RegistryCQRS(event, query)
+  implicit def apply[F[_]: Monad, A, D](implicit
+    event: EventStore[F, RegistryEvent],
+    query: CRUDStore[F, (A, A), D],
+  ): RegistryCQRS[F, A, D] = new RegistryCQRS(event, query)
 }
 
-class RegistryCQRS[F[_]: Monad, A, D] private[registry](
+class RegistryCQRS[F[_]: Monad, A, D](
     event: EventStore[F, RegistryEvent],
     query: CRUDStore[F, (A, A), D],
   ) extends Registry[F, A, D] {
@@ -40,4 +45,25 @@ class RegistryCQRS[F[_]: Monad, A, D] private[registry](
 
   override def register(community: Community[A, D], member: Member[A, D], data: D): F[Unit] =
     event.emit(RegistryEvent.RegisterMember(community, member, data))
+}
+
+object RegistryCRUD {
+
+  implicit def apply[F[_]: Monad, A, D](implicit query: CRUDStore[F, (A, A), D]): RegistryCRUD[F, A, D] =
+    new RegistryCRUD(query)
+}
+
+class RegistryCRUD[F[_]: Monad, A, D](query: CRUDStore[F, (A, A), D]) extends Registry[F, A, D] {
+
+  override def isMember(community: Community[A, D], member: Member[A, D]): F[Boolean] =
+    query.exists(community.address -> member.address)
+
+  override def load(community: Community[A, D], member: Member[A, D]): F[Option[D]] =
+    query.get(community.address -> member.address)
+
+  override def loadAll(community: Community[A, D]): F[List[D]] =
+    query.all
+
+  override def register(community: Community[A, D], member: Member[A, D], data: D): F[Unit] =
+    query.createPick(data, community.address -> member.address).void
 }

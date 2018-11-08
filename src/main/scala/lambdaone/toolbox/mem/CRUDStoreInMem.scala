@@ -4,6 +4,7 @@ import java.util.UUID
 
 import cats.effect.IO
 import cats.effect.concurrent.Ref
+import cats.implicits._
 import lambdaone.toolbox.{CRUDStore, |->}
 import CRUDStoreInMem._
 import cats.data.Kleisli
@@ -11,50 +12,57 @@ import cats.{Id, ~>}
 
 object CRUDStoreInMem {
 
-  type Imports[A] = Ref[IO, UUID |-> A]
+  type Generator[I] = IO[I]
 
-  type InMem[A, T] = Kleisli[IO, Imports[A], T]
+  type Imports[I, A] = (Generator[I], Ref[IO, I |-> A])
 
-  def apply[A]: CRUDStoreInMem[A] = new CRUDStoreInMem()
+  type InMem[I, A, T] = Kleisli[IO, Imports[I, A], T]
 
-  def idGenerator: IO[UUID] = IO(UUID.randomUUID())
+  def apply[I, A]: CRUDStoreInMem[I, A] = new CRUDStoreInMem[I, A]
 
-  def getRef[A]: InMem[A, Imports[A]] =
-    Kleisli.ask
+  def uuidGenerator: IO[UUID] = IO(UUID.randomUUID())
 
-  def lift[A, T](io: IO[T]): InMem[A, T] =
-    Kleisli.liftF(io)
+  def tupledUUIDGenerator: IO[(UUID, UUID)] = (uuidGenerator, uuidGenerator).mapN(_ -> _)
 
-  def withRef[A, T](f: Imports[A] => IO[T]): InMem[A, T] =
-    Kleisli.ask[IO, Imports[A]].flatMapF(f)
+  def withRef[I, A, T](f: Ref[IO, I |-> A] => IO[T]): InMem[I, A, T] =
+    Kleisli.ask[IO, Imports[I, A]].map(_._2).flatMapF(f)
 
-  def buildStore[A]: IO[Imports[A]]=
-    Ref.of[IO, UUID |-> A](Map.empty)
+  def generateId[I, A]: InMem[I, A, I] =
+    Kleisli.ask[IO, Imports[I, A]].map(_._1).flatMapF(identity)
 
-  def Interpreter[A]: InMem[A, ?] ~> Id =
-    new (InMem[A, ?] ~> Id) {
-      override def apply[T](fa: InMem[A, T]): Id[T] =
-        buildStore[A].flatMap(fa.run).unsafeRunSync()
+  def buildStore[I, A]: IO[Ref[IO, I |-> A]] =
+    Ref.of[IO, I |-> A](Map.empty)
+
+  def Interpreter[I, A](generator: Generator[I]): InMem[I, A, ?] ~> Id =
+    new (InMem[I, A, ?] ~> Id) {
+      override def apply[T](fa: InMem[I, A, T]): Id[T] =
+        buildStore[I, A].flatMap(store => fa.run(generator -> store)).unsafeRunSync()
     }
 }
 
-class CRUDStoreInMem[A] extends CRUDStore[InMem[A, ?], UUID, A] {
+class CRUDStoreInMem[I, A] extends CRUDStore[InMem[I, A, ?], I, A] {
 
   /** Stores `a` and produces a new unique reference */
-  override def create(a: A): InMem[A, UUID] =
+  override def create(a: A): InMem[I, A, I] =
     for {
-      ref <- getRef
-      newId <- lift(idGenerator)
-      _ <- lift(ref.update(_ + (newId -> a)))
+      newId <- generateId[I, A]
+      _ <- withRef[I, A, Unit](_.update(_ + (newId -> a)))
     } yield newId
 
+  /** Store `a` with chosen id `id`, returns true if success, false if there was already an element with such id */
+  def createPick(a: A, id: I): InMem[I, A, Boolean] =
+    withRef(_.modify { state =>
+      if (state.contains(id)) state -> false
+      else (state + (id -> a)) -> true
+    })
+
   /** Uses a reference to try to look for the data in the store */
-  override def get(id: UUID): InMem[A, Option[A]] =
+  override def get(id: I): InMem[I, A, Option[A]] =
     withRef(_.get.map(_.get(id)))
 
   /** Uses a reference to try to look for the data in the store, if found, applies `f` and stores the result,
     * returns the new version if the data if successful */
-  override def update(id: UUID)(f: A => A): InMem[A, Option[A]] =
+  override def update(id: I)(f: A => A): InMem[I, A, Option[A]] =
     withRef(_.modify { state =>
       state.get(id) match {
         case Some(a) => (state + (id -> f(a))) -> Some(f(a))
@@ -63,7 +71,7 @@ class CRUDStoreInMem[A] extends CRUDStore[InMem[A, ?], UUID, A] {
     })
 
   /** Uses a reference to try to delete the data, returns it if successful */
-  override def delete(id: UUID): InMem[A, Option[A]] =
+  override def delete(id: I): InMem[I, A, Option[A]] =
     withRef(_.modify { state =>
       state.get(id) match {
         case Some(a) => (state - id) -> Some(a)
@@ -72,7 +80,7 @@ class CRUDStoreInMem[A] extends CRUDStore[InMem[A, ?], UUID, A] {
     })
 
   /** Returns all data within the store */
-  override def all: InMem[A, List[A]] =
+  override def all: InMem[I, A, List[A]] =
     withRef(_.get.map(_.values.toList))
 }
 

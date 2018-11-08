@@ -1,5 +1,7 @@
 package lambdaone.toolbox
 
+import java.util.UUID
+
 import org.scalatest.FunSuite
 import cats.instances.string._
 import lambdaone.toolbox.denotations.CRUDStoreDenotation
@@ -15,7 +17,7 @@ class CRUDStoreSpec extends FunSuite with Discipline {
   ).crud)
 
   checkAll("CRUDStore[InMem[String, ?], UUID, String]", CRUDStoreTests(
-    CRUDStoreInMem[String],
-    CRUDStoreInMem.Interpreter[String]
+    CRUDStoreInMem[UUID, String],
+    CRUDStoreInMem.Interpreter[UUID, String](CRUDStoreInMem.uuidGenerator)
   ).crud)
 }

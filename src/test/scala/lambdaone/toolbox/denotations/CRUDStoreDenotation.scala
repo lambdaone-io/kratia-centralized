@@ -46,6 +46,14 @@ class CRUDStoreDenotation[I, A] extends CRUDStore[Denotation[I, A, ?], I, A] {
     } yield newId
   }
 
+  /** Store `a` with chosen id `id`, returns true if success, false if there was already an element with such id */
+  override def createPick(a: A, id: I): Denotation[I, A, Boolean] = {
+    State { case (s, i, g) =>
+      if (s.contains(id)) (s, i, g) -> false
+      else (s + (id -> a), id :: i, g) -> true
+    }
+  }
+
   /** Uses a reference to try to look for the data in the store */
   override def get(id: I): Denotation[I, A, Option[A]] =
     State.inspect { case (s, _, _) => s.get(id) }

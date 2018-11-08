@@ -14,6 +14,9 @@ trait CRUDStore[F[_], I, A] {
   /** Stores `a` and produces a new unique reference */
   def create(a: A): F[I]
 
+  /** Store `a` with chosen id `id`, returns true if success, false if there was already an element with such id */
+  def createPick(a: A, id: I): F[Boolean]
+
   /** Uses a reference to try to look for the data in the store */
   def get(id: I): F[Option[A]]
 
