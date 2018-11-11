@@ -194,8 +194,5 @@ native/libsigar-universal64-macosx.dylib
 
 logs/
 
-# scalafmt - scala formatting tools configuration file
-.scalafmt.conf
-
 *.example
 jenkins-stages.groovy
