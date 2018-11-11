@@ -13,6 +13,8 @@ trait EventStore[F[_], A] {
 
   def loadAll: F[NonEmptyList[A]]
 
+  def filter(p: A => Boolean): F[List[A]]
+
   // Scan from earliest to latest
   def find(f: A => Boolean): F[Option[A]]
 
@@ -36,6 +38,9 @@ object EventStore {
 
         override def loadAll: F[NonEmptyList[A]] =
           ref.get
+
+        override def filter(p: A => Boolean): F[List[A]] =
+          ref.get.map(_.filter(p))
 
         override def find(f: A => Boolean): F[Option[A]] =
           ref.get.map(_.find(f))

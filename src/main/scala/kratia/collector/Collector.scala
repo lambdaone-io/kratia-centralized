@@ -1,8 +1,8 @@
 package kratia.collector
 
-import cats.Monad
-import cats.implicits._
+import cats._
 import cats.data.NonEmptyList
+import cats.implicits._
 import cats.effect.Sync
 import kratia.collector.Collector.{Vote, _}
 import kratia.collector.CollectorEvent.Voted
@@ -15,7 +15,7 @@ trait Collector[F[_], P] {
 
   def create(ballot: Ballot[P], nickname: String)(implicit F: Sync[F]): F[BallotBox[P]]
 
-  def vote(member: Member, vote: Vote[P])(implicit F: Sync[F]): F[ProofOfVote]
+  def vote(ballotBox: BallotBox[P], member: Member, vote: Vote[P])(implicit F: Sync[F]): F[ProofOfVote]
 
   def validateVote(proofOfVote: ProofOfVote)(implicit F: Sync[F]): F[Boolean]
 
@@ -37,7 +37,7 @@ object Collector {
 
     object No extends BinaryProposal
 
-    val all = NonEmptyList.fromListUnsafe(List(Yes, No))
+    val AllChoices = NonEmptyList.fromListUnsafe(List(Yes, No))
 
   }
 
@@ -45,7 +45,7 @@ object Collector {
 
   case class Ballot[P](p: NonEmptyList[P]) extends AnyVal
 
-  def binaryBallot = Ballot[BinaryProposal](BinaryProposal.all)
+  def binaryBallot = Ballot[BinaryProposal](BinaryProposal.AllChoices)
 
   case class BallotBox[P](address: Address, nickname: String)
 
@@ -54,42 +54,47 @@ object Collector {
 }
 
 object CollectorWithEventStore {
+
   implicit def CollectorWitEventStore[F[_], P](implicit store: EventStore[F, CollectorEvent[P]], F: Sync[F], M: Monad[F]): Collector[F, P] =
     new Collector[F, P]() {
 
       override def create(ballot: Ballot[P], nickname: String)(implicit F: Sync[F]): F[BallotBox[P]] =
         for {
           uuid <- Address.gen
-          ballotBox <- store.append(CollectorEvent.CreateBallotBox(uuid, ballot))
+          _ <- store.append(CollectorEvent.CreateBallotBox(uuid, ballot))
         } yield BallotBox(uuid, nickname)
 
-      override def vote(member: Member, vote: Vote[P])(implicit F: Sync[F]): F[ProofOfVote] = {
+      override def vote(ballotBox: BallotBox[P], member: Member, vote: Vote[P])(implicit F: Sync[F]): F[ProofOfVote] = {
         for {
-          ref <- Address.gen
-          proof <- store.append(Voted(ref, member, vote))
-        } yield ProofOfVote(ref, member)
+          proof <- Address.gen
+          _ <- store.append(Voted(proof, ballotBox, member, vote))
+        } yield ProofOfVote(proof, member)
       }
 
-      override def validateVote(proofOfVote: ProofOfVote)(F: Sync[F]): F[Boolean] = {
+      override def validateVote(proofOfVote: ProofOfVote)(implicit F: Sync[F]): F[Boolean] = {
         store.find {
-          case e: Voted[P] => e.ref == proofOfVote.ref
+          case e: Voted[P] => e.proof == proofOfVote.ref
         }.map(_.isDefined)
       }
 
       override def inspect(ballotBox: BallotBox[P]): F[InfluenceAllocation[P]] = {
-
+        store.filter {
+          case e: Voted[P] => e.ballotBox.address == ballotBox.address
+        }.map {
+          _.map { case e: Voted[P] => e.vote.influenceAllocation }
+        }.map(_.combineAll)
       }
     }
 
 }
 
-abstract class CollectorEvent[P]
+sealed trait CollectorEvent[P]
 
 object CollectorEvent {
 
   case class CreateBallotBox[P](ref: Address, ballot: Ballot[P]) extends CollectorEvent[P]
 
-  case class Voted[P](ref: Address, member: Member, vote: Vote[P]) extends CollectorEvent[P]
+  case class Voted[P](proof: Address, ballotBox: BallotBox[P], m: Member, vote: Vote[P]) extends CollectorEvent[P]
 
 }
 
