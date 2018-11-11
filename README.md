@@ -1,3 +1,4 @@
+[![Build Status](https://travis-ci.com/lambdaone-io/kratia-centralized.svg?branch=master)](https://travis-ci.com/lambdaone-io/kratia-centralized)
 [![Waffle.io - Columns and their card count](https://badge.waffle.io/lambdaone-io/kratia-centralized.svg?columns=all)](https://waffle.io/lambdaone-io/kratia-centralized)
 
 # Kratia Engine Centralized
