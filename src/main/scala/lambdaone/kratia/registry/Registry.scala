@@ -12,7 +12,7 @@ trait Registry[F[_], A] {
 
   def loadAll(community: Community[A]): F[List[A]]
 
-  def register(community: Community[A], member: Member[A], data: A): F[()]
+  def register(community: Community[A], member: Member[A], data: A): F[Unit]
 }
 
 object Registry {
