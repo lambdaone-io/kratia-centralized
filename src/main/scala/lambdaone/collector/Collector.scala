@@ -1,10 +1,10 @@
-package kratia.collector
+package lambdaone.collector
 
 import cats._
 import cats.data.NonEmptyList
 import cats.implicits._
-import kratia.collector.Collector._
-import kratia.collector.CollectorEvent.Voted
+import lambdaone.collector.Collector._
+import lambdaone.collector.CollectorEvent.Voted
 import lambdaone.toolbox.{CRUDStore, EventStore, UniqueGen}
 
 trait Collector[F[_], Address, P] {
@@ -60,7 +60,7 @@ object CollectorCQRS {
 }
 
 /*
-Crud store: I is proofOfVote.Id
+CRUD store: I is proofOfVote.Id
             D is (Ballotbox.id, Vote)
  */
 class CollectorCQRS[F[_] : Monad, A, P](
