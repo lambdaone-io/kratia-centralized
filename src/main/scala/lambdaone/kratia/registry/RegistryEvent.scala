@@ -1,8 +1,10 @@
 package lambdaone.kratia.registry
 
-sealed trait RegistryEvent[A]
+sealed trait RegistryEvent
 
 object RegistryEvent {
 
-  case class RegisterMember[A](community: Community[A], member: Member[A], data: A) extends RegistryEvent[A]
+  case class RegisterMember[A, D](community: Community[A, D], member: Member[A, D], data: D) extends RegistryEvent
+
+  case class UnregisterMember[A, D](community: Community[A, D], member: Member[A, D]) extends RegistryEvent
 }
