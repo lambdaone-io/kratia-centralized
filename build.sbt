@@ -24,7 +24,11 @@ libraryDependencies ++= List(
   "org.http4s" %% "http4s-circe" % http4s,
   "org.http4s" %% "http4s-dsl" % http4s,
   "ch.qos.logback" % "logback-classic" % "1.2.3",
-  "org.scalatest" %% "scalatest" % "3.0.4" % "test",
+  "org.scalatest" %% "scalatest" % "3.0.5" % "test",
+  "org.typelevel" %% "discipline" % "0.10.0" % "test"
 )
 
+resolvers += Resolver.sonatypeRepo("releases")
+
+addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.8")
 addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)

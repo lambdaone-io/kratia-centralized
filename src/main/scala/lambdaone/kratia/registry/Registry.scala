@@ -1,41 +1,69 @@
 package lambdaone.kratia.registry
 
 import cats.Monad
-import lambdaone.toolbox.{EventStore, Store}
 import cats.implicits._
-
-trait Registry[F[_], A] {
-
-  def isMember(community: Community[A], member: Member[A]): F[Boolean]
-
-  def load(community: Community[A], member: Member[A]): F[Option[A]]
-
-  def loadAll(community: Community[A]): F[List[A]]
-
-  def register(community: Community[A], member: Member[A], data: A): F[Unit]
-}
+import lambdaone.toolbox.{CRUDStore, EventStore}
 
 object Registry {
 
-  implicit def registryWithEventStore[F[_], A](implicit store: EventStore[F, RegistryEvent[A]], F: Monad[F]): Registry[F, A] =
-    new Registry[F, A] {
+  implicit def apply[F[_]: Monad, A, D](implicit query: CRUDStore[F, (A, A), D]): Registry[F, A, D] =
+    new RegistryCRUD[F, A, D](query)
+}
 
-      override def isMember(community: Community[A], member: Member[A]): F[Boolean] =
-        store.find {
-          case RegistryEvent.RegisterMember(community0, member0, _) => community == community0 && member == member0
-        }.map(_.isDefined)
+trait Registry[F[_], A, D] {
 
-      override def load(community: Community[A], member: Member[A]): F[Option[A]] =
-        store.findMap {
-          case RegistryEvent.RegisterMember(community0, member0, data) if community == community0 && member == member0 => data
-        }
+  def isMember(community: Community[A, D], member: Member[A, D]): F[Boolean]
 
-      override def loadAll(community: Community[A]): F[List[A]] =
-        store.filterMap {
-          case RegistryEvent.RegisterMember(community0, _, data) if community == community0 => data
-        }
+  def load(community: Community[A, D], member: Member[A, D]): F[Option[D]]
 
-      override def register(community: Community[A], member: Member[A], data: A): F[Unit] =
-        store.append(RegistryEvent.RegisterMember(community, member, data)).void
-    }
+  def loadAll(community: Community[A, D]): F[List[D]]
+
+  def register(community: Community[A, D], member: Member[A, D], data: D): F[Unit]
+}
+
+object RegistryCQRS {
+
+  implicit def apply[F[_]: Monad, A, D](implicit
+    event: EventStore[F, RegistryEvent],
+    query: CRUDStore[F, (A, A), D],
+  ): RegistryCQRS[F, A, D] = new RegistryCQRS(event, query)
+}
+
+class RegistryCQRS[F[_]: Monad, A, D](
+    event: EventStore[F, RegistryEvent],
+    query: CRUDStore[F, (A, A), D],
+  ) extends Registry[F, A, D] {
+
+  override def isMember(community: Community[A, D], member: Member[A, D]): F[Boolean] =
+    query.exists(community.address -> member.address)
+
+  override def load(community: Community[A, D], member: Member[A, D]): F[Option[D]] =
+    query.get(community.address -> member.address)
+
+  override def loadAll(community: Community[A, D]): F[List[D]] =
+    query.all
+
+  override def register(community: Community[A, D], member: Member[A, D], data: D): F[Unit] =
+    event.emit(RegistryEvent.RegisterMember(community, member, data))
+}
+
+object RegistryCRUD {
+
+  implicit def apply[F[_]: Monad, A, D](implicit query: CRUDStore[F, (A, A), D]): RegistryCRUD[F, A, D] =
+    new RegistryCRUD(query)
+}
+
+class RegistryCRUD[F[_]: Monad, A, D](query: CRUDStore[F, (A, A), D]) extends Registry[F, A, D] {
+
+  override def isMember(community: Community[A, D], member: Member[A, D]): F[Boolean] =
+    query.exists(community.address -> member.address)
+
+  override def load(community: Community[A, D], member: Member[A, D]): F[Option[D]] =
+    query.get(community.address -> member.address)
+
+  override def loadAll(community: Community[A, D]): F[List[D]] =
+    query.all
+
+  override def register(community: Community[A, D], member: Member[A, D], data: D): F[Unit] =
+    query.createPick(data, community.address -> member.address).void
 }
