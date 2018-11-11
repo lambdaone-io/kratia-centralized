@@ -3,23 +3,19 @@ package kratia.collector
 import cats._
 import cats.data.NonEmptyList
 import cats.implicits._
-import cats.effect.Sync
-import kratia.collector.Collector.{Vote, _}
+import kratia.collector.Collector._
 import kratia.collector.CollectorEvent.Voted
-import kratia.collector.DecisionType.Majority
-import kratia.members.Member
-import kratia.utils.Address
-import lambdaone.toolbox.EventStore
+import lambdaone.toolbox.{CRUDStore, EventStore, UniqueGen}
 
-trait Collector[F[_], P] {
+trait Collector[F[_], Address, P] {
 
-  def create(ballot: Ballot[P], nickname: String)(implicit F: Sync[F]): F[BallotBox[P]]
+  def create(ballot: Ballot[P], nickname: String): F[BallotBox[Address, P]]
 
-  def vote(ballotBox: BallotBox[P], member: Member, vote: Vote[P])(implicit F: Sync[F]): F[ProofOfVote]
+  def vote(ballotBox: BallotBox[Address, P], vote: Vote[Address, P]): F[ProofOfVote[Address]]
 
-  def validateVote(proofOfVote: ProofOfVote)(implicit F: Sync[F]): F[Boolean]
+  def validateVote(proofOfVote: ProofOfVote[Address]): F[Boolean]
 
-  def inspect(ballotBox: BallotBox[P]): F[InfluenceAllocation[P]]
+  def inspect(ballotBox: BallotBox[Address, P]): F[InfluenceAllocation[P]]
 
 }
 
@@ -41,82 +37,69 @@ object Collector {
 
   }
 
-  case class Vote[P](ballot: Ballot[P], m: Member, influenceAllocation: InfluenceAllocation[P])
+  case class Vote[Address, P](ballot: Ballot[P], memberAddresss: Address, influenceAllocation: InfluenceAllocation[P])
 
   case class Ballot[P](p: NonEmptyList[P]) extends AnyVal
 
   def binaryBallot = Ballot[BinaryProposal](BinaryProposal.AllChoices)
 
-  case class BallotBox[P](address: Address, nickname: String)
+  case class BallotBox[Address, P](address: Address, nickname: String)
 
-  case class ProofOfVote(ref: Address, member: Member)
-
-}
-
-object CollectorWithEventStore {
-
-  implicit def CollectorWitEventStore[F[_], P](implicit store: EventStore[F, CollectorEvent[P]], F: Sync[F], M: Monad[F]): Collector[F, P] =
-    new Collector[F, P]() {
-
-      override def create(ballot: Ballot[P], nickname: String)(implicit F: Sync[F]): F[BallotBox[P]] =
-        for {
-          uuid <- Address.gen
-          _ <- store.append(CollectorEvent.CreateBallotBox(uuid, ballot))
-        } yield BallotBox(uuid, nickname)
-
-      override def vote(ballotBox: BallotBox[P], member: Member, vote: Vote[P])(implicit F: Sync[F]): F[ProofOfVote] = {
-        for {
-          proof <- Address.gen
-          _ <- store.append(Voted(proof, ballotBox, member, vote))
-        } yield ProofOfVote(proof, member)
-      }
-
-      override def validateVote(proofOfVote: ProofOfVote)(implicit F: Sync[F]): F[Boolean] = {
-        store.find {
-          case e: Voted[P] => e.proof == proofOfVote.ref
-        }.map(_.isDefined)
-      }
-
-      override def inspect(ballotBox: BallotBox[P]): F[InfluenceAllocation[P]] = {
-        store.filter {
-          case e: Voted[P] => e.ballotBox.address == ballotBox.address
-        }.map {
-          _.map { case e: Voted[P] => e.vote.influenceAllocation }
-        }.map(_.combineAll)
-      }
-    }
+  case class ProofOfVote[Address](ref: Address, memberAddress: Address)
 
 }
 
-sealed trait CollectorEvent[P]
+object CollectorCQRS {
+
+  implicit def apply[F[_] : Monad, A, P](implicit
+                                         event: EventStore[F, CollectorEvent[A, P]],
+                                         query: CRUDStore[F, A, (A, Vote[A, P])],
+                                         uniqueGen: UniqueGen[F, A]
+                                        ): CollectorCQRS[F, A, P]
+  = new CollectorCQRS(event, query, uniqueGen)
+}
+
+/*
+Crud store: I is proofOfVote.Id
+            D is (Ballotbox.id, Vote)
+ */
+class CollectorCQRS[F[_] : Monad, A, P](
+                                         event: EventStore[F, CollectorEvent[A, P]],
+                                         query: CRUDStore[F, A, (A, Vote[A, P])],
+                                         uniqueGen: UniqueGen[F, A]
+                                       ) extends Collector[F, A, P] {
+
+  override def create(ballot: Ballot[P], nickname: String): F[BallotBox[A, P]] =
+    for {
+      address <- uniqueGen.gen
+      _ <- event.emit(CollectorEvent.CreatedBallotBox(address, ballot))
+    } yield BallotBox(address, nickname)
+
+  override def vote(ballotBox: BallotBox[A, P], vote: Vote[A, P]): F[ProofOfVote[A]] = {
+    for {
+      proof <- uniqueGen.gen
+      _ <- event.emit(Voted(proof, ballotBox, vote))
+    } yield ProofOfVote(proof, vote.memberAddresss)
+  }
+
+  override def validateVote(proofOfVote: ProofOfVote[A]): F[Boolean] =
+    query.exists(proofOfVote.ref)
+
+  override def inspect(ballotBox: BallotBox[A, P]): F[InfluenceAllocation[P]] =
+    query.filter {
+      case (ballotBoxRef, Vote(_, _, _)) => ballotBoxRef == ballotBox.address
+    }.map {
+      _.map { case (_, Vote(_, _, influenceAllocation)) => influenceAllocation }
+    }.map(_.combineAll)
+}
+
+sealed trait CollectorEvent[A, P]
 
 object CollectorEvent {
 
-  case class CreateBallotBox[P](ref: Address, ballot: Ballot[P]) extends CollectorEvent[P]
+  case class CreatedBallotBox[A, P](ref: A, ballot: Ballot[P]) extends CollectorEvent[A, P]
 
-  case class Voted[P](proof: Address, ballotBox: BallotBox[P], m: Member, vote: Vote[P]) extends CollectorEvent[P]
-
-}
-
-// The code below this line does not belong here
-trait DecisionResolution[P, M] {
-  def resolve(influenceAllocation: InfluenceAllocation[P], influence: Influence, dt: DecisionType): List[P]
+  case class Voted[A, P](proof: A, ballotBox: BallotBox[A, P], vote: Vote[A, P]) extends CollectorEvent[A, P]
 
 }
 
-object DecisionResolutionInstances {
-  def majorityDecisionResolution[P] = new DecisionResolution[P, Majority.type] {
-    override def resolve(influenceAllocation: InfluenceAllocation[P], influence: Influence, dt: DecisionType): List[P] = ???
-  }
-}
-
-
-abstract class DecisionType
-
-object DecisionType {
-
-  object Majority extends DecisionType
-
-  case class LowInertiaResolution(threshold: Double) extends DecisionType
-
-}
