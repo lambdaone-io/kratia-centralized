@@ -4,6 +4,7 @@ import cats.effect.{ConcurrentEffect, IO, Timer}
 import fs2.concurrent.Queue
 import kratia.helpers.KratiaSuite.{Context, TestFailure}
 import kratia.App
+import kratia.App.{Connection, Kratia}
 import kratia.Protocol.{InMessage, OutMessage}
 import kratia.utils._
 import lambdaone.toolbox.State
