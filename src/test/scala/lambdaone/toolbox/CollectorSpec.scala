@@ -12,5 +12,5 @@ class CollectorSpec extends FunSuite with Discipline {
   checkAll("Collector[Denotation[String, ?], Int, String]", CollectorTests(
     CollectorDenotation[Int, String],
     CollectorDenotation.Interpreter[Int, String]
-  ).crud)
+  ).collector)
 }

@@ -12,9 +12,9 @@ trait CollectorTests[F[_], I] extends Laws {
 
   def laws: CollectorLaws[F, I]
 
-  def crud(implicit arbA: Arbitrary[BinaryProposal], eqA: Eq[BinaryProposal], monad: Monad[F], monoid: Monoid[BinaryProposal], ordering: Ordering[BinaryProposal]): RuleSet =
+  def collector(implicit arbA: Arbitrary[BinaryProposal], eqA: Eq[BinaryProposal], monad: Monad[F], monoid: Monoid[BinaryProposal], ordering: Ordering[BinaryProposal]): RuleSet =
     new DefaultRuleSet(
-      "crud",
+      "collector",
       None,
       "new Ballot boxes have empty validateVote" -> forAll(laws.newBallotBoxes _)
     )
