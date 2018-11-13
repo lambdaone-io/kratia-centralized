@@ -1,18 +1,16 @@
 package lambdaone.toolbox
 
-import java.util.UUID
-
-import cats.instances.string._
-import lambdaone.toolbox.denotations.CRUDStoreDenotation
+import lambdaone.toolbox.denotations.CollectorDenotation
 import lambdaone.toolbox.discipline.CollectorTests
-import lambdaone.toolbox.mem.CRUDStoreInMem
 import org.scalatest.FunSuite
 import org.typelevel.discipline.scalatest.Discipline
+
+import cats.instances.string._
 
 class CollectorSpec extends FunSuite with Discipline {
 
   checkAll("Collector[Denotation[String, ?], Int, String]", CollectorTests(
-    CRUDStoreDenotation[Int, String],
-    CRUDStoreDenotation.Interpreter[Int, String]
+    CollectorDenotation[Int, String],
+    CollectorDenotation.Interpreter[Int, String]
   ).crud)
 }
