@@ -7,11 +7,11 @@ import lambdaone.toolbox.CRUDStore
 import org.scalacheck.Arbitrary
 import org.typelevel.discipline.Laws
 
-trait CRUDStoreTests[F[_], I, A] extends Laws {
+trait CRUDStoreTests[F[_], D[_], I, A] extends Laws {
 
-  def laws: CRUDStoreLaws[F, I, A]
+  def laws: CRUDStoreLaws[F, D, I, A]
 
-  def crud(implicit arbA: Arbitrary[A], eqA: Eq[A], monad: Monad[F], monoid: Monoid[A], ordering: Ordering[A]): RuleSet =
+  def crud(implicit arbA: Arbitrary[A], eqA: Eq[A]): RuleSet =
     new DefaultRuleSet(
       "crud",
       None,
@@ -24,6 +24,11 @@ trait CRUDStoreTests[F[_], I, A] extends Laws {
 
 object CRUDStoreTests {
 
-  def apply[F[_], I, A](implicit store: CRUDStore[F, I, A], run: F ~> Id): CRUDStoreTests[F, I, A] =
-    new CRUDStoreTests[F, I, A] { def laws: CRUDStoreLaws[F, I, A] = CRUDStoreLaws[F, I, A] }
+  def apply[F[_]: Monad, D[_]: Monad, I, A: Monoid: Ordering](implicit
+    implementation0: CRUDStore[F, I, A],
+    denotation0: CRUDStore[D, I, A],
+    interpret0: F ~> Id,
+    denote0: D ~> Id
+  ): CRUDStoreTests[F, D, I, A] =
+    new CRUDStoreTests[F, D, I, A] { def laws: CRUDStoreLaws[F, D, I, A] = CRUDStoreLaws[F, D, I, A] }
 }

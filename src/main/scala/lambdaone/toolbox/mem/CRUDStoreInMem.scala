@@ -1,52 +1,41 @@
 package lambdaone.toolbox.mem
 
-import java.util.UUID
-
-import cats.effect.IO
 import cats.effect.concurrent.Ref
-import cats.implicits._
-import lambdaone.toolbox.{CRUDStore, |->}
+import lambdaone.toolbox.{CRUDStore, UniqueGen}
 import CRUDStoreInMem._
+import cats.arrow.FunctionK
 import cats.data.Kleisli
+import cats.effect.IO
 import cats.{Id, ~>}
 
 object CRUDStoreInMem {
 
-  type Generator[I] = IO[I]
-
-  type Imports[I, A] = (Generator[I], Ref[IO, I |-> A])
+  type Imports[I, A] = Ref[IO, Map[I, A]]
 
   type InMem[I, A, T] = Kleisli[IO, Imports[I, A], T]
 
-  def apply[I, A]: CRUDStoreInMem[I, A] = new CRUDStoreInMem[I, A]
-
-  def uuidGenerator: IO[UUID] = IO(UUID.randomUUID())
-
-  def tupledUUIDGenerator: IO[(UUID, UUID)] = (uuidGenerator, uuidGenerator).mapN(_ -> _)
-
-  def withRef[I, A, T](f: Ref[IO, I |-> A] => IO[T]): InMem[I, A, T] =
-    Kleisli.ask[IO, Imports[I, A]].map(_._2).flatMapF(f)
-
-  def generateId[I, A]: InMem[I, A, I] =
-    Kleisli.ask[IO, Imports[I, A]].map(_._1).flatMapF(identity)
-
-  def buildStore[I, A]: IO[Ref[IO, I |-> A]] =
-    Ref.of[IO, I |-> A](Map.empty)
-
-  def Interpreter[I, A](generator: Generator[I]): InMem[I, A, ?] ~> Id =
-    new (InMem[I, A, ?] ~> Id) {
-      override def apply[T](fa: InMem[I, A, T]): Id[T] =
-        buildStore[I, A].flatMap(store => fa.run(generator -> store)).unsafeRunSync()
+  def runEffect[I, A](imports: Imports[I, A]): InMem[I, A, ?] ~> IO =
+    FunctionK.lift[InMem[I, A, ?], IO] {
+      _.run(imports)
     }
+
+  def runUnsafeSync[I, A](imports: Imports[I, A]): InMem[I, A, ?] ~> Id =
+    FunctionK.lift[InMem[I, A, ?], Id] {
+      _.run(imports).unsafeRunSync()
+    }
+
 }
 
-class CRUDStoreInMem[I, A] extends CRUDStore[InMem[I, A, ?], I, A] {
+case class CRUDStoreInMem[I, A](gen: UniqueGen[IO, I]) extends CRUDStore[InMem[I, A, ?], I, A] {
+
+  private def withRef[T](f: Ref[IO, Map[I, A]] => IO[T]): InMem[I, A, T] =
+    Kleisli.ask[IO, Imports[I, A]].flatMapF(f)
 
   /** Stores `a` and produces a new unique reference */
   override def create(a: A): InMem[I, A, I] =
     for {
-      newId <- generateId[I, A]
-      _ <- withRef[I, A, Unit](_.update(_ + (newId -> a)))
+      newId <- Kleisli.liftF(gen.gen)
+      _ <- withRef(_.update(_ + (newId -> a)))
     } yield newId
 
   /** Store `a` with chosen id `id`, returns true if success, false if there was already an element with such id */
@@ -82,5 +71,6 @@ class CRUDStoreInMem[I, A] extends CRUDStore[InMem[I, A, ?], I, A] {
   /** Returns all data within the store */
   override def all: InMem[I, A, List[A]] =
     withRef(_.get.map(_.values.toList))
+
 }
 

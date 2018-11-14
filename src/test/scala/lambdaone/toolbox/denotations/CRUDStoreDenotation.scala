@@ -1,83 +1,69 @@
 package lambdaone.toolbox.denotations
 
 import cats.data.State
-import lambdaone.toolbox.CRUDStore
+import lambdaone.toolbox.{CRUDStore, UniqueGen}
 import CRUDStoreDenotation._
+import cats.arrow.FunctionK
 import cats.{Id, ~>}
 
 object CRUDStoreDenotation {
 
-  type LastIds[I] = List[I]
+  type Denotation[I, A, T] = State[(Map[I, A], I), T]
 
-  type IdGenerator[I] = List[I] => I
-
-  type LastStorage[I, A] = Map[I, A]
-
-  type Denotation[I, A, T] = State[(LastStorage[I, A], LastIds[I], IdGenerator[I]), T]
-
-  def numericGenerator[I](implicit numeric: Numeric[I]): IdGenerator[I] = {
-    case Nil => numeric.zero
-    case x :: _ => numeric.plus(x, numeric.one)
-  }
-
-  def Interpreter[I, A](implicit numeric: Numeric[I]): Denotation[I, A, ?] ~> Id =
-    new (Denotation[I, A, ?] ~> Id) {
-      override def apply[T](fa: Denotation[I, A, T]): Id[T] =
-        fa.runA((Map.empty, List.empty, numericGenerator)).value
+  def run[I, A](initial: (Map[I, A], I)): Denotation[I, A, ?] ~> Id =
+    FunctionK.lift[Denotation[I, A, ?], Id] {
+      _.run(initial).value
     }
 
-  def apply[I, A]: CRUDStoreDenotation[I, A] = new CRUDStoreDenotation()
 }
 
-class CRUDStoreDenotation[I, A] extends CRUDStore[Denotation[I, A, ?], I, A] {
+case class CRUDStoreDenotation[I, A](gen: UniqueGen[State[I, ?], I]) extends CRUDStore[Denotation[I, A, ?], I, A] {
 
   /** Stores `a` and produces a new unique reference */
   override def create(a: A): Denotation[I, A, I] = {
 
-    def generateId: Denotation[I, A, I] =
-      State { case (s, i, g) => (s, g(i) :: i, g) -> g(i) }
-
     def addToState(newId: I): Denotation[I, A, Unit] =
-      State.modify { case (s, i, g) => (s + (newId -> a), newId :: i, g) }
+      State.modify { case (s, i) => (s + (newId -> a), i) }
 
     for {
-      newId <- generateId
+      newId <- gen.gen.contramap[(Map[I, A], I)](_._2)
       _ <- addToState(newId)
     } yield newId
   }
 
   /** Store `a` with chosen id `id`, returns true if success, false if there was already an element with such id */
   override def createPick(a: A, id: I): Denotation[I, A, Boolean] = {
-    State { case (s, i, g) =>
-      if (s.contains(id)) (s, i, g) -> false
-      else (s + (id -> a), id :: i, g) -> true
+    State { case (s, i) =>
+      if (s.contains(id)) (s, i) -> false
+      else (s + (id -> a), i) -> true
     }
   }
 
   /** Uses a reference to try to look for the data in the store */
   override def get(id: I): Denotation[I, A, Option[A]] =
-    State.inspect { case (s, _, _) => s.get(id) }
+    State.inspect { case (s, _) => s.get(id) }
 
   /** Uses a reference to try to look for the data in the store, if found, applies `f` and stores the result,
     * returns the new version if the data if successful */
   override def update(id: I)(f: A => A): Denotation[I, A, Option[A]] =
-    State { case (s, i, g) =>
+    State { case (s, i) =>
       s.get(id) match {
-        case None => (s, i, g) -> None
-        case Some(a) => (s + (id -> a), i, g) -> Some(f(a))
+        case None => (s, i) -> None
+        case Some(a) => (s + (id -> a), i) -> Some(f(a))
       }
     }
 
   /** Uses a reference to try to delete the data, returns it if successful */
   override def delete(id: I): Denotation[I, A, Option[A]] =
-    State { case (s, i, g) =>
+    State { case (s, i) =>
       s.get(id) match {
-        case None => (s, i, g) -> None
-        case Some(a) => (s - id, i, g) -> Some(a)
+        case None => (s, i) -> None
+        case Some(a) => (s - id, i) -> Some(a)
       }
     }
 
   /** Returns all data within the store */
   override def all: Denotation[I, A, List[A]] =
-    State.inspect { case (s, _, _) => s.values.toList }
+    State.inspect { case (s, _) => s.values.toList }
+
 }
