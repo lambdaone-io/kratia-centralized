@@ -14,14 +14,16 @@ object CRUDStoreInMem {
 
   type InMem[I, A, T] = Kleisli[IO, Imports[I, A], T]
 
-  def runEffect[I, A](imports: Imports[I, A]): InMem[I, A, ?] ~> IO =
-    FunctionK.lift[InMem[I, A, ?], IO] {
-      _.run(imports)
+  def runEffectWith[I, A](imports: Imports[I, A]): InMem[I, A, ?] ~> IO =
+    new FunctionK[InMem[I, A, ?], IO] {
+      def apply[T](fa: InMem[I, A, T]): IO[T] =
+        fa.run(imports)
     }
 
-  def runUnsafeSync[I, A](imports: Imports[I, A]): InMem[I, A, ?] ~> Id =
-    FunctionK.lift[InMem[I, A, ?], Id] {
-      _.run(imports).unsafeRunSync()
+  def runUnsafeSync[I, A]: InMem[I, A, ?] ~> Id =
+    new FunctionK[InMem[I, A, ?], Id] {
+      def apply[T](fa: InMem[I, A, T]): Id[T] =
+        fa.run(Ref.of[IO, Map[I, A]](Map.empty).unsafeRunSync()).unsafeRunSync()
     }
 
 }

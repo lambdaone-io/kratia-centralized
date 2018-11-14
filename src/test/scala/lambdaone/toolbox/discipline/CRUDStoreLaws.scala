@@ -20,40 +20,48 @@ trait CRUDStoreLaws[F[_], D[_], I, A] {
 
   implicit val monoid: Monoid[A]
 
-  def interpret: F ~> Id
+  def implement: F ~> Id
 
   def denote: D ~> Id
 
   def fetching(xs: List[A]): IsEq[List[Option[A]]] = {
 
-    def program[G[_]](implicit F: Monad[G], cat: CRUDStore[G, I, A]): G[List[Option[A]]] =
+    def program[G[_]](implicit G: Monad[G], cat: CRUDStore[G, I, A]): G[List[Option[A]]] =
       xs.traverse(cat.create) >>= (_.traverse(cat.get))
 
-    interpret(program).sorted <-> denote(program).sorted
+    implement(program[F]).sorted <-> denote(program[D]).sorted
   }
 
   def creation(xs: List[A]): IsEq[List[A]] = {
 
-    def program[G[_]](implicit F: Monad[G], cat: CRUDStore[G, I, A]): G[List[A]] =
+    def program[G[_]](implicit G: Monad[G], cat: CRUDStore[G, I, A]): G[List[A]] =
       xs.traverse(cat.create) *> cat.all
 
-    interpret(program).sorted <-> denote(program).sorted
+    implement(program[F]).sorted <-> denote(program[D]).sorted
   }
 
   def deletion(xs: List[A]): IsEq[List[Option[A]]] = {
 
-    def program[G[_]](implicit F: Monad[G], cat: CRUDStore[G, I, A]): G[List[Option[A]]] =
+    def program[G[_]](implicit G: Monad[G], cat: CRUDStore[G, I, A]): G[List[Option[A]]] =
       xs.traverse(cat.create) >>= (_.traverse(cat.delete))
 
-    interpret(program).sorted <-> denote(program).sorted
+    implement(program[F]).sorted <-> denote(program[D]).sorted
   }
 
   def updates(xs: List[A]): IsEq[List[Option[A]]] = {
 
-    def program[G[_]](implicit F: Monad[G], cat: CRUDStore[G, I, A]): G[List[Option[A]]] =
+    def program[G[_]](implicit G: Monad[G], cat: CRUDStore[G, I, A]): G[List[Option[A]]] =
       xs.traverse(cat.create) >>= (_.traverse(cat.update(_)(a => a |+| a)))
 
-    interpret(program).sorted <-> denote(program).sorted
+    implement(program[F]).sorted <-> denote(program[D]).sorted
+  }
+
+  def creationPick(a: A, id: I): IsEq[List[A]] = {
+
+    def program[G[_]](implicit G: Monad[G], cat: CRUDStore[G, I, A]): G[List[A]] =
+      cat.createPick(a, id) *> cat.createPick(a, id) *> cat.all
+
+    implement(program[F]).sorted <-> denote(program[D]).sorted
   }
 }
 
@@ -76,7 +84,7 @@ object CRUDStoreLaws {
       implicit val D: Monad[D] = D0
       implicit val ordering: Ordering[A] = ordering0
       implicit val monoid: Monoid[A] = monoid0
-      def interpret: F ~> Id = interpret0
+      def implement: F ~> Id = interpret0
       def denote: D ~> Id = denote0
     }
 }
