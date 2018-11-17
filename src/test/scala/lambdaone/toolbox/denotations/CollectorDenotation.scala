@@ -11,13 +11,15 @@ object CollectorDenotation {
 
   type LastIds[Address] = List[Address]
 
-  type IdGenerator[Address] = List[Address] => Address
+  type AddressGenerator[Address] = List[Address] => Address
+
+  type IdGenerator[I] = List[I] => I
 
   type LastStorage[I, A] = Map[I, A]
 
-  type Denotation[I, A, T] = State[(LastStorage[I, A], LastIds[I], IdGenerator[I]), T]
+  type Denotation[I, A, T] = State[(LastStorage[I, A]), T]
 
-  def numericGenerator[I](implicit numeric: Numeric[I]): IdGenerator[I] = {
+  def numericGenerator[I](implicit numeric: Numeric[I]): AddressGenerator[I] = {
     case Nil => numeric.zero
     case x :: _ => numeric.plus(x, numeric.one)
   }
@@ -25,7 +27,7 @@ object CollectorDenotation {
   def Interpreter[I, A](implicit numeric: Numeric[I]): Denotation[I, A, ?] ~> Id =
     new ( Denotation[I, A, ?] ~> Id ) {
       override def apply[T](fa: Denotation[I, A, T]): Id[T] =
-        fa.runA((Map.empty, List.empty, numericGenerator)).value
+        fa.runA((Map.empty)).value
     }
 
   def apply[I, A]: CollectorDenotation[I, A] = new CollectorDenotation()

@@ -3,7 +3,7 @@ package lambdaone.toolbox.discipline
 import cats.implicits._
 import cats.{Eq, Id, Monad, Monoid, ~>}
 import lambdaone.collector.Collector
-import lambdaone.collector.Collector.BinaryProposal
+import lambdaone.collector.Collector.{Ballot, BinaryProposal}
 import org.scalacheck.Arbitrary
 import org.scalacheck.Prop.forAll
 import org.typelevel.discipline.Laws
@@ -12,7 +12,7 @@ trait CollectorTests[F[_], I] extends Laws {
 
   def laws: CollectorLaws[F, I]
 
-  def collector(implicit arbA: Arbitrary[BinaryProposal], eqA: Eq[BinaryProposal], monad: Monad[F], monoid: Monoid[BinaryProposal], ordering: Ordering[BinaryProposal]): RuleSet =
+  def collector(implicit arbA: Arbitrary[Ballot[BinaryProposal]], eqA: Eq[BinaryProposal], monad: Monad[F], monoid: Monoid[BinaryProposal], ordering: Ordering[BinaryProposal]): RuleSet =
     new DefaultRuleSet(
       "collector",
       None,
