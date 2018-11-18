@@ -1,33 +1,47 @@
 package lambdaone.toolbox.denotations
 
-import cats.data.State
+import cats.arrow.FunctionK
+import cats.data.{Kleisli, State}
 import cats.{Id, ~>}
 import lambdaone.collector.Collector
 import lambdaone.collector.Collector.{Ballot, BallotBox, InfluenceAllocation}
+import lambdaone.toolbox.denotations.CRUDStoreDenotation.Denotation
 import lambdaone.toolbox.denotations.CollectorDenotation.Denotation
-import lambdaone.toolbox.denotations.UniqueGenDenotation.{Generator, LastGenerated}
 
 
 object CollectorDenotation {
 
-  type Denotation[I, P] = State[(UniqueGenDenotation.Denotation[I, I], CRUDStoreDenotation.Denotation[I, BallotBox[I, P]]), BallotBox[I, P]]
+  type Generator[I] = I => I
 
-  def Interpreter[I, A](implicit numeric: Numeric[I]): Denotation[I, ?] ~> Id =
-    new ( Denotation[I, ?] ~> Id ) {
-      override def apply[T](fa: Denotation[I, T]): Id[T] =
-        fa.runA((new UniqueGenDenotation[I](), new CRUDStoreDenotation[I, BallotBox[I, T]])()).value
+  type GeneratorState[I] = I
+
+  type CollectorState[I, A] = (Map[I, A], GeneratorState[I])
+
+  type Denotation[I, A, T] = Kleisli[State[CollectorState[I, A], ?], Generator[I], T]
+
+  def run[I, A](initial: (Map[I, A], I), generator: I => I): Denotation[I, A, ?] ~> Id =
+    new FunctionK[Denotation[I, A, ?], Id] {
+      def apply[T](fa: Denotation[I, A, T]): Id[T] =
+        fa.run(generator).run(initial).value._2
     }
-
-  def apply[I, A]: CollectorDenotation[I, A] = new CollectorDenotation()
 }
 
-class CollectorDenotation[Address, P] extends Collector[Denotation[Address, ?], Address, P] {
+case class CollectorDenotation[Address, P] extends Collector[Denotation[Address, ?], Address, P] {
 
   import CollectorDenotation._
+
+  private def generateId: Denotation[I, A, I] =
+    gen.gen.mapF {
+      _.transformS(
+        _._2,
+        (r, sb) => (r._1, sb)
+      )
+    }
 
   override def create(ballot: Ballot[P], nickname: String): Denotation[Address, BallotBox[Address, P]] =
   State {
     case (genDen, storeDen ) => {
+      val g: UniqueGenDenotation.Denotation[Address, Address] = genDen.gen
       ???
     }
 

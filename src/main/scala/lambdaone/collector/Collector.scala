@@ -13,7 +13,7 @@ trait Collector[F[_], Address, P] {
 
   def vote(ballotBox: BallotBox[Address, P], vote: Vote[Address, P]): F[ProofOfVote[Address]]
 
-  def validateVote(proofOfVote: ProofOfVote[Address]): F[Boolean]
+  def validateVote(ballotBox: BallotBox[Address, P], proofOfVote: ProofOfVote[Address]): F[Boolean]
 
   def inspect(ballotBox: BallotBox[Address, P]): F[InfluenceAllocation[P]]
 
@@ -27,6 +27,7 @@ object Collector {
 
   sealed class BinaryProposal
 
+
   object BinaryProposal {
 
     object Yes extends BinaryProposal
@@ -35,13 +36,13 @@ object Collector {
 
     val AllChoices = NonEmptyList.fromListUnsafe(List(Yes, No))
 
+    val ballot = Ballot[BinaryProposal](BinaryProposal.AllChoices)
+
   }
 
   case class Vote[Address, P](ballot: Ballot[P], memberAddresss: Address, influenceAllocation: InfluenceAllocation[P])
 
   case class Ballot[P](p: NonEmptyList[P]) extends AnyVal
-
-  def binaryBallot = Ballot[BinaryProposal](BinaryProposal.AllChoices)
 
   case class BallotBox[Address, P](address: Address, nickname: String)
 
@@ -53,19 +54,17 @@ object CollectorCQRS {
 
   implicit def apply[F[_] : Monad, A, P](implicit
                                          event: EventStore[F, CollectorEvent[A, P]],
-                                         query: CRUDStore[F, A, (A, Vote[A, P])],
+                                         queryVotes: CRUDStore[F, A, (A, Vote[A, P])],
+                                         queryProofs: CRUDStore[F, A, (A, ProofOfVote[A])],
                                          uniqueGen: UniqueGen[F, A]
                                         ): CollectorCQRS[F, A, P]
-  = new CollectorCQRS(event, query, uniqueGen)
+  = new CollectorCQRS(event, queryVotes, queryProofs, uniqueGen)
 }
 
-/*
-CRUD store: I is proofOfVote.Id
-            D is (Ballotbox.id, Vote)
- */
 class CollectorCQRS[F[_] : Monad, A, P](
                                          event: EventStore[F, CollectorEvent[A, P]],
-                                         query: CRUDStore[F, A, (A, Vote[A, P])],
+                                         queryVotes: CRUDStore[F, A, (A, Vote[A, P])],
+                                         queryProofs: CRUDStore[F, A, (A, ProofOfVote[A])],
                                          uniqueGen: UniqueGen[F, A]
                                        ) extends Collector[F, A, P] {
 
@@ -82,11 +81,12 @@ class CollectorCQRS[F[_] : Monad, A, P](
     } yield ProofOfVote(proof, vote.memberAddresss)
   }
 
-  override def validateVote(proofOfVote: ProofOfVote[A]): F[Boolean] =
-    query.exists(proofOfVote.ref)
+  override def validateVote(ballotBox: BallotBox[A, P], proofOfVote: ProofOfVote[A]): F[Boolean] = {
+    queryProofs.get(proofOfVote.ref).map(_.map(_._2.memberAddress == proofOfVote.memberAddress).getOrElse(false))
+  }
 
   override def inspect(ballotBox: BallotBox[A, P]): F[InfluenceAllocation[P]] =
-    query.filter {
+    queryVotes.filter {
       case (ballotBoxRef, Vote(_, _, _)) => ballotBoxRef == ballotBox.address
     }.map {
       _.map { case (_, Vote(_, _, influenceAllocation)) => influenceAllocation }

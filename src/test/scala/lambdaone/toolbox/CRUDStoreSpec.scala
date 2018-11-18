@@ -1,12 +1,11 @@
 package lambdaone.toolbox
 
 import cats.effect.IO
-import cats.effect.concurrent.Ref
-import org.scalatest.FunSuite
 import cats.instances.string._
 import lambdaone.toolbox.denotations.CRUDStoreDenotation
 import lambdaone.toolbox.discipline.CRUDStoreTests
 import lambdaone.toolbox.mem.CRUDStoreInMem
+import org.scalatest.FunSuite
 import org.typelevel.discipline.scalatest.Discipline
 
 class CRUDStoreSpec extends FunSuite with Discipline {
