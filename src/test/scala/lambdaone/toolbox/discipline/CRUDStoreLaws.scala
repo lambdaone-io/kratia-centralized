@@ -6,44 +6,85 @@ import cats.implicits._
 import lambdaone.helpers.IsEq
 import lambdaone.toolbox.CRUDStore
 
-trait CRUDStoreLaws[F[_], I, A] {
+trait CRUDStoreLaws[F[_], D[_], I, A] {
 
-  def crud: CRUDStore[F, I, A]
+  implicit def implementation: CRUDStore[F, I, A]
 
-  def interpret: F ~> Id
+  implicit def denotation: CRUDStore[D, I, A]
 
-  def fetching(xs: List[A])(implicit F: Monad[F], ordering: Ordering[A]): IsEq[List[Option[A]]] = {
-    val program: F[List[Option[A]]] =
-      xs.traverse(crud.create) >>= (_.traverse(crud.get))
-    interpret(program).sorted <-> xs.sorted.map(Option.apply)
+  implicit val F: Monad[F]
+
+  implicit val D: Monad[D]
+
+  implicit val ordering: Ordering[A]
+
+  implicit val monoid: Monoid[A]
+
+  def implement: F ~> Id
+
+  def denote: D ~> Id
+
+  def fetching(xs: List[A]): IsEq[List[Option[A]]] = {
+
+    def program[G[_]](implicit G: Monad[G], cat: CRUDStore[G, I, A]): G[List[Option[A]]] =
+      xs.traverse(cat.create) >>= (_.traverse(cat.get))
+
+    implement(program[F]).sorted <-> denote(program[D]).sorted
   }
 
-  def creation(xs: List[A])(implicit F: Monad[F], ordering: Ordering[A]): IsEq[List[A]] = {
-    val program: F[List[A]] =
-      xs.traverse(crud.create) *> crud.all
-    interpret(program).sorted <-> xs.sorted
+  def creation(xs: List[A]): IsEq[List[A]] = {
+
+    def program[G[_]](implicit G: Monad[G], cat: CRUDStore[G, I, A]): G[List[A]] =
+      xs.traverse(cat.create) *> cat.all
+
+    implement(program[F]).sorted <-> denote(program[D]).sorted
   }
 
-  def deletion(xs: List[A])(implicit F: Monad[F], ordering: Ordering[A]): IsEq[List[Option[A]]] = {
-    val program: F[List[Option[A]]] =
-      xs.traverse(crud.create) >>= (_.traverse(crud.delete))
-    interpret(program).sorted <-> xs.sorted.map(Option.apply)
+  def deletion(xs: List[A]): IsEq[List[Option[A]]] = {
+
+    def program[G[_]](implicit G: Monad[G], cat: CRUDStore[G, I, A]): G[List[Option[A]]] =
+      xs.traverse(cat.create) >>= (_.traverse(cat.delete))
+
+    implement(program[F]).sorted <-> denote(program[D]).sorted
   }
 
-  def updates(xs: List[A])(implicit F: Monad[F], ordering: Ordering[A], monoid: Monoid[A]): IsEq[List[Option[A]]] = {
-    val program: F[List[Option[A]]] =
-      xs.traverse(crud.create) >>= (_.traverse(crud.update(_)(a => a |+| a)))
-    interpret(program).sorted <-> xs.sorted.map(a => Option(a |+| a))
+  def updates(xs: List[A]): IsEq[List[Option[A]]] = {
+
+    def program[G[_]](implicit G: Monad[G], cat: CRUDStore[G, I, A]): G[List[Option[A]]] =
+      xs.traverse(cat.create) >>= (_.traverse(cat.update(_)(a => a |+| a)))
+
+    implement(program[F]).sorted <-> denote(program[D]).sorted
+  }
+
+  def creationPick(a: A, id: I): IsEq[List[A]] = {
+
+    def program[G[_]](implicit G: Monad[G], cat: CRUDStore[G, I, A]): G[List[A]] =
+      cat.createPick(a, id) *> cat.createPick(a, id) *> cat.all
+
+    implement(program[F]).sorted <-> denote(program[D]).sorted
   }
 }
 
 object CRUDStoreLaws {
 
-  def apply[F[_], I, A](implicit store: CRUDStore[F, I, A], run: F ~> Id): CRUDStoreLaws[F, I, A] =
-    new CRUDStoreLaws[F, I, A] {
-
-      override def crud: CRUDStore[F, I, A] = store
-
-      override def interpret: F ~> Id = run
+  def apply[F[_], D[_], I, A](implicit
+    implementation0: CRUDStore[F, I, A],
+    denotation0: CRUDStore[D, I, A],
+    F0: Monad[F],
+    D0: Monad[D],
+    ordering0: Ordering[A],
+    monoid0: Monoid[A],
+    interpret0: F ~> Id,
+    denote0: D ~> Id
+  ): CRUDStoreLaws[F, D, I, A] =
+    new CRUDStoreLaws[F, D, I, A] {
+      def implementation: CRUDStore[F, I, A] = implementation0
+      def denotation: CRUDStore[D, I, A] = denotation0
+      implicit val F: Monad[F] = F0
+      implicit val D: Monad[D] = D0
+      implicit val ordering: Ordering[A] = ordering0
+      implicit val monoid: Monoid[A] = monoid0
+      def implement: F ~> Id = interpret0
+      def denote: D ~> Id = denote0
     }
 }

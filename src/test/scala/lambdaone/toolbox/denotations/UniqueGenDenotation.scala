@@ -1,28 +1,13 @@
 package lambdaone.toolbox.denotations
 
-import cats.data.State
+import cats.data.{Kleisli, State}
 import lambdaone.toolbox.UniqueGen
-import UniqueGenDenotation._
 
-object UniqueGenDenotation {
-
-  /** Invariant: every member of the LastGenerated is unique */
-  type LastGenerated[A] = List[A]
-
-  /** Invariant: every A outcome of Generator is not in the domain List[A]
-    *
-    * \-/ xs \in List[A] | Generator(xs) \notin xs
-    */
-  type Generator[A] = List[A] => A
-
-  type Denotation[A, T] = State[(LastGenerated[A], Generator[A]), T]
-}
-
-class UniqueGenDenotation[A] extends UniqueGen[Denotation[A, ?], A] {
+case class UniqueGenDenotation[A]() extends UniqueGen[Kleisli[State[A, ?], A => A, ?], A] {
 
   /**
     * Generates a unique A every time `gen` is called
     */
-  override def gen: Denotation[A, A] =
-    State { case (state, generator) => (generator(state) :: state, generator) -> generator(state) }
+  override def gen: Kleisli[State[A, ?], A => A, A] =
+    Kleisli.ask[State[A, ?], A => A].flatMapF(f => State[A, A] { last => (f(last), f(last)) })
 }
