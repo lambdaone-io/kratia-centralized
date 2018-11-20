@@ -88,7 +88,7 @@ case class CRUDStoreDenotation[I, A]() extends CRUDStore[Denotation[I, A, ?], I,
     }
 
   /** Returns all data within the store */
-  override def all: Denotation[I, A, List[A]] =
-    inspect { s => s.values.toList }
+  override def all: Denotation[I, A, Map[I, A]] =
+    inspect { identity }
 
 }

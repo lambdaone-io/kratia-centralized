@@ -21,15 +21,7 @@ trait Registry[F[_], A, D] {
   def register(community: Community[A, D], member: Member[A, D], data: D): F[Unit]
 }
 
-object RegistryCQRS {
-
-  implicit def apply[F[_]: Monad, A, D](implicit
-    event: EventStore[F, RegistryEvent],
-    query: CRUDStore[F, (A, A), D],
-  ): RegistryCQRS[F, A, D] = new RegistryCQRS(event, query)
-}
-
-class RegistryCQRS[F[_]: Monad, A, D](
+case class RegistryCQRS[F[_]: Monad, A, D](
     event: EventStore[F, RegistryEvent],
     query: CRUDStore[F, (A, A), D],
   ) extends Registry[F, A, D] {
@@ -41,19 +33,13 @@ class RegistryCQRS[F[_]: Monad, A, D](
     query.get(community.address -> member.address)
 
   override def loadAll(community: Community[A, D]): F[List[D]] =
-    query.all
+    query.filterId { case (c, _) => c == community.address }.map(_.values.toList)
 
   override def register(community: Community[A, D], member: Member[A, D], data: D): F[Unit] =
     event.emit(RegistryEvent.RegisterMember(community, member, data))
 }
 
-object RegistryCRUD {
-
-  implicit def apply[F[_]: Monad, A, D](implicit query: CRUDStore[F, (A, A), D]): RegistryCRUD[F, A, D] =
-    new RegistryCRUD(query)
-}
-
-class RegistryCRUD[F[_]: Monad, A, D](query: CRUDStore[F, (A, A), D]) extends Registry[F, A, D] {
+case class RegistryCRUD[F[_]: Monad, A, D](query: CRUDStore[F, (A, A), D]) extends Registry[F, A, D] {
 
   override def isMember(community: Community[A, D], member: Member[A, D]): F[Boolean] =
     query.exists(community.address -> member.address)
@@ -62,7 +48,7 @@ class RegistryCRUD[F[_]: Monad, A, D](query: CRUDStore[F, (A, A), D]) extends Re
     query.get(community.address -> member.address)
 
   override def loadAll(community: Community[A, D]): F[List[D]] =
-    query.all
+    query.filterId { case (c, _) => c == community.address }.map(_.values.toList)
 
   override def register(community: Community[A, D], member: Member[A, D], data: D): F[Unit] =
     query.createPick(data, community.address -> member.address).void
