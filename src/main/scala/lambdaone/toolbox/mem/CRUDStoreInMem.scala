@@ -71,8 +71,8 @@ case class CRUDStoreInMem[I, A](gen: UniqueGen[IO, I]) extends CRUDStore[InMem[I
     })
 
   /** Returns all data within the store */
-  override def all: InMem[I, A, List[A]] =
-    withRef(_.get.map(_.values.toList))
+  override def all: InMem[I, A, Map[I, A]] =
+    withRef(_.get)
 
 }
 

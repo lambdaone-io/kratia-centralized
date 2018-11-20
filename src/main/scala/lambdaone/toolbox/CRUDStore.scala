@@ -48,15 +48,19 @@ trait CRUDStore[F[_], I, A] {
   def delete(id: I): F[Option[A]]
 
   /** Returns all data within the store */
-  def all: F[List[A]]
+  def all: F[Map[I, A]]
 
   /** Returns true if data with such reference exists in the store */
   def exists(id: I)(implicit F: Functor[F]): F[Boolean] =
     get(id).map(_.isDefined)
 
   /** Selection of a subset of the data */
-  def filter(f: A => Boolean)(implicit F: Functor[F]): F[List[A]] =
-    all.map(_.filter(f))
+  def filter(f: A => Boolean)(implicit F: Functor[F]): F[Map[I, A]] =
+    all.map(_.filter { case (_, a) => f(a) })
+
+  /** Selection of a subset of the data based on an id property */
+  def filterId(f: I => Boolean)(implicit F: Functor[F]): F[Map[I, A]] =
+    all.map(_.filterKeys(f))
 
   /** Delete and ignore result */
   def delete_(id: I)(implicit F: Functor[F]): F[Unit] =

@@ -35,7 +35,7 @@ trait CRUDStoreLaws[F[_], D[_], I, A] {
   def creation(xs: List[A]): IsEq[List[A]] = {
 
     def program[G[_]](implicit G: Monad[G], cat: CRUDStore[G, I, A]): G[List[A]] =
-      xs.traverse(cat.create) *> cat.all
+      xs.traverse(cat.create) *> cat.all.map(_.values.toList)
 
     implement(program[F]).sorted <-> denote(program[D]).sorted
   }
@@ -59,7 +59,7 @@ trait CRUDStoreLaws[F[_], D[_], I, A] {
   def creationPick(a: A, id: I): IsEq[List[A]] = {
 
     def program[G[_]](implicit G: Monad[G], cat: CRUDStore[G, I, A]): G[List[A]] =
-      cat.createPick(a, id) *> cat.createPick(a, id) *> cat.all
+      cat.createPick(a, id) *> cat.createPick(a, id) *> cat.all.map(_.values.toList)
 
     implement(program[F]).sorted <-> denote(program[D]).sorted
   }
