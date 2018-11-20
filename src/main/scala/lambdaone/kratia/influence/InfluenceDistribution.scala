@@ -6,19 +6,16 @@ import lambdaone.kratia.influence.Meritocracy.MeritEndpoint
 
 trait InfluenceDistribution[F[_], Address, Data, Method] {
 
-  def dist(community: Community[Address, Data], member: Member[Address, Data], method: Method)(implicit registry: Registry[F, Address, Data]): F[Double]
+  def dist(community: Community[Address, Data], member: Member[Address, Data], method: Method, registry: Registry[F, Address, Data]): F[Double]
 }
 
 object InfluenceDistribution {
 
-  def distribute[F[_], A, D, M](community: Community[A, D], member: Member[A, D], method: M)(implicit inf: InfluenceDistribution[F, A, D, M], registry: Registry[F, A, D]): F[Double] =
-    inf.dist(community, member, method)
+  def distribute[F[_], A, D, M](community: Community[A, D], member: Member[A, D], method: M, registry: Registry[F, A, D])(implicit inf: InfluenceDistribution[F, A, D, M]): F[Double] =
+    inf.dist(community, member, method, registry)
 
   def lift[F[_], A, D, M](f: (Community[A, D], Member[A, D], M, Registry[F, A, D]) => F[Double]): InfluenceDistribution[F, A, D, M] =
-    new InfluenceDistribution[F, A, D, M] {
-      def dist(community: Community[A, D], member: Member[A, D], method: M)(implicit registry: Registry[F, A, D]): F[Double] =
-        f(community, member, method, registry)
-    }
+    (community: Community[A, D], member: Member[A, D], method: M, registry: Registry[F, A, D]) => f(community, member, method, registry)
 
   implicit def democratic[F[_]: Functor, A, D]: InfluenceDistribution[F, A, D, Democracy] =
     Democracy.democraticDistribution
