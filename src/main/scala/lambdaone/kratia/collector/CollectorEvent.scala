@@ -1,6 +1,6 @@
-package lambdaone.collector
+package lambdaone.kratia.collector
 
-import lambdaone.collector.Collector.{Ballot, BallotBox, Vote}
+import lambdaone.kratia.collector.Collector.{Ballot, BallotBox, Vote}
 
 sealed trait CollectorEvent[A, P]
 

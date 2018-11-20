@@ -1,10 +1,10 @@
-package lambdaone.collector
+package lambdaone.kratia.collector
 
 import cats._
 import cats.data.NonEmptyList
 import cats.implicits._
-import lambdaone.collector.Collector._
-import lambdaone.collector.CollectorEvent.Voted
+import lambdaone.kratia.collector.Collector._
+import lambdaone.kratia.collector.CollectorEvent.Voted
 import lambdaone.toolbox.{CRUDStore, EventStore, UniqueGen}
 
 trait Collector[F[_], Address, P] {
