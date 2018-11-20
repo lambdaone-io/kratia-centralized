@@ -82,17 +82,13 @@ class CollectorCQRS[F[_] : Monad, A, P](
   }
 
   override def validateVote(ballotBox: BallotBox[A, P], proofOfVote: ProofOfVote[A]): F[Boolean] = {
-    queryProofs.get(proofOfVote.ref).map(_.map(_._2.memberAddress == proofOfVote.memberAddress).getOrElse(false))
+    queryProofs.get(proofOfVote.ref).map(_.exists(_._2.memberAddress == proofOfVote.memberAddress))
   }
 
   override def inspect(ballotBox: BallotBox[A, P]): F[InfluenceAllocation[P]] =
     queryVotes.filter {
       case (ballotBoxRef, Vote(_, _, _)) => ballotBoxRef == ballotBox.address
     }.map {
-      _.map { case (_, Vote(_, _, influenceAllocation)) => influenceAllocation }
+      _.values.toList.map { case (_, Vote(_, _, influenceAllocation)) => influenceAllocation }
     }.map(_.combineAll)
 }
-
-
-
-
