@@ -1,10 +1,9 @@
 package lambdaone.kratia.influence
 
-import cats.data.{Kleisli, State}
+import cats.data.State
 import cats.implicits._
 import lambdaone.kratia.influence.Meritocracy.MeritEndpoint
 import lambdaone.kratia.registry.{Community, Member, Registry, RegistryDenotation}
-import lambdaone.toolbox.denotations.CRUDStoreDenotation
 import org.scalatest.FlatSpec
 
 class InfluenceDistributionSpec extends FlatSpec {
@@ -54,14 +53,10 @@ class InfluenceDistributionSpec extends FlatSpec {
       .map(_.toMap)
 
   def run[A](p: Program[A]): A =
-    RegistryDenotation.run[Address, Data](state -> (0, 0), identity)(p)
+    RegistryDenotation.run[Address, Data](state)(p)
 
   def fetchMerit(endpoint: MeritEndpoint): Program[Double] =
-    Kleisli.pure[
-      State[CRUDStoreDenotation.StoreState[(Address, Address), Data], ?],
-      CRUDStoreDenotation.Generator[(Address, Address)],
-      Double
-    ](merit.getOrElse(endpoint, 0.0))
+    State.pure(merit.getOrElse(endpoint, 0.0))
 
   "Democracy" should "give same influence to each member" in {
 
@@ -99,7 +94,7 @@ class InfluenceDistributionSpec extends FlatSpec {
 
   "Meritocracy" should "give influence depending on an external service" in {
 
-    assert(run(distributeFor(community1, Meritocracy(fetchMerit))) == Map(
+    assert(run(distributeFor(community1, Meritocracy(fetchMerit))(Meritocracy.meritocraticDistribution[Program, Address])) == Map(
       Member(1) -> 1.0,
       Member(2) -> 2.0,
       Member(3) -> 0.0,
