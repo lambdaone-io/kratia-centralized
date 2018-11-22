@@ -14,7 +14,7 @@ scalacOptions ++= Seq(
 
 lazy val http4s = "0.20.0-M3"
 
-lazy val circe = "0.10.0"
+lazy val circe = "0.10.1"
 
 libraryDependencies ++= List(
   "com.typesafe" % "config" % "1.3.2",
