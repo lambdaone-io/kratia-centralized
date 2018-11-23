@@ -6,14 +6,16 @@ import org.http4s.server.blaze._
 import org.http4s.server.Router
 import org.http4s.implicits._
 import cats.implicits._
-import io.circe.{Decoder, Encoder}
+import io.circe.{Decoder, Encoder, Json}
 import lambdaone.kratia.protocol.{Kratia, MemberData, Register}
 import lambdaone.kratia.protocol.MemberData.Nickname
 import lambdaone.kratia.protocol.Register.{RegisterRequest, RegisterResponse}
 import org.http4s.circe.{jsonEncoderOf, jsonOf}
-import org.http4s.{EntityDecoder, EntityEncoder, HttpApp, HttpRoutes}
+import org.http4s._
 import org.http4s.dsl.io._
 import io.circe.generic.auto._
+import lambdaone.kratia.registry.Member
+import org.http4s.headers
 
 object Main extends IOApp {
 
@@ -25,10 +27,24 @@ object Main extends IOApp {
       .serve.compile.drain.as(ExitCode.Success)
   } yield code
 
-  def app[A: Decoder: Encoder](kratia: Kratia[IO, A]): HttpApp[IO] =
-    Router("/api/v1" -> v1kratia(implicitly[Decoder[A]], implicitly[Encoder[A]], kratia)).orNotFound
+  def app[A: Decoder: Encoder](kratia: Kratia[IO, A]): HttpApp[IO] = {
+    implicit val k: Kratia[IO, A] = kratia
+    Router("/api/v1" -> v1registry).orNotFound
+  }
 
-  def v1kratia[A: Decoder: Encoder](implicit kratia: Kratia[IO, A]): HttpRoutes[IO] = HttpRoutes.of[IO] {
+  def auth[A: Decoder, D](request: Request[IO])(program: Member[A, D] => IO[Response[IO]]): IO[Response[IO]] = {
+    val Bearer = """^Bearer\s(.*)$""".r
+    request.headers.get(headers.Authorization).fold(Forbidden()) { header =>
+      header.value match {
+        case Bearer(token) =>
+          Json.fromString(token).as[A].fold(_ => Forbidden(), address => program(Member(address)))
+        case _ =>
+          Forbidden()
+      }
+    }
+  }
+
+  def v1registry[A: Decoder: Encoder](implicit kratia: Kratia[IO, A]): HttpRoutes[IO] = HttpRoutes.of[IO] {
 
     case request @ POST -> Root / "registry" =>
       implicit val decoder: EntityDecoder[IO, RegisterRequest[A, Nickname]] =
@@ -44,5 +60,11 @@ object Main extends IOApp {
         )
         ok <- Ok(res)
       } yield ok
+
+    case request @ GET -> Root / "registry" =>
+      auth[A, Unit](request) { member =>
+        println(member)
+        Ok()
+      }
   }
 }
