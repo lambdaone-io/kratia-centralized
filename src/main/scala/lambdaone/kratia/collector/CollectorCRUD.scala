@@ -15,7 +15,7 @@ object CollectorCRUD {
   type AllVotes[A, P] = Map[A, (A, InfluenceAllocation[P])]
 
   /** The valid ballot for this box, the date to be closed (on seconds since the epoch) and all acc votes */
-  case class BoxData[A, P](validBallot: Ballot[P], closedOn: Timestamp, votes: AllVotes[A, P])
+  case class BoxData[A, P, D](validBallot: Ballot[P], closedOn: Timestamp, data: D, votes: AllVotes[A, P])
 
   sealed trait CollectorFailure extends RuntimeException
 
@@ -34,25 +34,25 @@ object CollectorCRUD {
   }
 }
 
-case class CollectorCRUD[F[_], A, P](
+case class CollectorCRUD[F[_], A, P, D](
     clock: Clock[F],
-    store: CRUDPick[F, A, BoxData[A, P]],
+    store: CRUDPick[F, A, BoxData[A, P, D]],
     uniqueGen: UniqueGen[F, A]
-  )(implicit F: MonadError[F, Throwable]) extends Collector[F, A, P] {
+  )(implicit F: MonadError[F, Throwable]) extends Collector[F, A, P, D] {
 
-  private def fetchData(address: A): F[BoxData[A, P]] =
-    store.get(address).flatMap[BoxData[A, P]] {
+  private def fetchData(address: A): F[BoxData[A, P, D]] =
+    store.get(address).flatMap[BoxData[A, P, D]] {
       case Some(data) => F.pure(data)
       case None => F.raiseError(NoSuchBallotBox(address))
     }
 
-  private def ensureIsOpen(address: A, data: BoxData[A, P]): F[Unit] =
+  private def ensureIsOpen(address: A, data: BoxData[A, P, D]): F[Unit] =
     clock.realTime(SECONDS).ensure(BallotBoxIsClosed(address))(_ < data.closedOn).void
 
-  override def create(ballot: Ballot[P], closesOn: Timestamp): F[BallotBox[A, P]] =
+  override def create(ballot: Ballot[P], closesOn: Timestamp, data: D): F[BallotBox[A, P]] =
     for {
       address <- uniqueGen.gen
-      _ <- store.create(BoxData(ballot, closesOn, Map.empty), address)
+      _ <- store.create(BoxData(ballot, closesOn, data, Map.empty), address)
     } yield BallotBox(address)
 
   /** Add or change the vote of a member if the box is open */
@@ -71,7 +71,7 @@ case class CollectorCRUD[F[_], A, P](
   override def validateVote(ballotBox: BallotBox[A, P], proofOfVote: ProofOfVote[A]): F[Boolean] = {
     val address = ballotBox.address
     for {
-      data <- store.get(address).flatMap[BoxData[A, P]] {
+      data <- store.get(address).flatMap[BoxData[A, P, D]] {
         case Some(data) => F.pure(data)
         case None => F.raiseError(NoSuchBallotBox(address))
       }
@@ -82,6 +82,10 @@ case class CollectorCRUD[F[_], A, P](
   override def inspect(ballotBox: BallotBox[A, P]): F[InfluenceAllocation[P]] =
     fetchData(ballotBox.address).map(_.votes.values.toList.map(_._2).combineAll)
 
+  override def list: F[List[BallotMetadata[A, P, D]]] =
+    store.all.map(_.toList.map {
+      case (address, data) => BallotMetadata[A, P, D](BallotBox(address), data.validBallot, data.closedOn, data.data)
+    })
 }
 
 

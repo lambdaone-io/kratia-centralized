@@ -2,9 +2,14 @@ package lambdaone.kratia.registry
 
 import io.circe.{Decoder, Encoder}
 
-case class Community[Address, Data](address: Address) extends AnyVal {
+/**
+  *
+  * @tparam A address type
+  * @tparam D data phantom type
+  */
+case class Community[A, D](address: A) extends AnyVal {
 
-  def map[Data0](f: Data => Data0): Community[Address, Data0] =
+  def map[D0](f: D => D0): Community[A, D0] =
     Community(address)
 }
 
