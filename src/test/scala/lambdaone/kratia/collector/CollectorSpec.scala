@@ -9,12 +9,12 @@ import org.scalatest.FlatSpec
 
 class CollectorSpec extends FlatSpec {
 
-  val collector: Collector[IO, UUID, BinaryProposal] =
+  val collector: Collector[IO, UUID, BinaryProposal, String] =
     Kratia.buildInMemCollector.unsafeRunSync()
 
   "Collector" should "simple collect votes" in {
     val program: IO[InfluenceAllocation[BinaryProposal]] = for {
-      box <- collector.create(BinaryProposal.ballot, closesOn = 999999999999l)
+      box <- collector.create(BinaryProposal.ballot, closesOn = 999999999999l, "")
       member1 = UUID.randomUUID()
       member2 = UUID.randomUUID()
       _ <- collector.vote(box, Vote(member1, InfluenceAllocation(Map(Yes -> 0, No -> 1))))
