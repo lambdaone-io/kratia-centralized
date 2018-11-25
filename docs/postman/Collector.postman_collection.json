@@ -1,0 +1,138 @@
+{
+	"info": {
+		"_postman_id": "fadec532-004c-42b4-b678-c99d9627bf06",
+		"name": "Collector",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Create Ballot Box",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"id": "ea554387-a2f4-4dbd-9b0f-cc39c4772c7d",
+						"exec": [
+							"var data = JSON.parse(responseBody);",
+							"",
+							"postman.setEnvironmentVariable(\"ballot-box\", data.data.ballotBox);",
+							""
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{member}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"name": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n\t\"validBallot\": [\"yes\", \"no\"],\n\t\"data\": \"Should we save humanity?\",\n\t\"closesOn\": 1543190400\n}"
+				},
+				"url": {
+					"raw": "{{hostname}}/api/v1/collector",
+					"host": [
+						"{{hostname}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"collector"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "List Ballot Boxes",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{member}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": ""
+				},
+				"url": {
+					"raw": "{{hostname}}/api/v1/collector",
+					"host": [
+						"{{hostname}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"collector"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Vote",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{member}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"name": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n\t\"ballotBox\": \"{{ballot-box}}\",\n\t\"vote\": [\n\t\t[\"yes\", 1.0],\n\t\t[\"no\", 0.0]\n\t]\n}"
+				},
+				"url": {
+					"raw": "{{hostname}}/api/v1/collector/vote",
+					"host": [
+						"{{hostname}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"collector",
+						"vote"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
