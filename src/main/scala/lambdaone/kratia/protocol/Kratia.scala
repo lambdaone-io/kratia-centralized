@@ -5,7 +5,7 @@ import java.util.UUID
 import cats.effect.{Clock, IO}
 import cats.effect.concurrent.Ref
 import lambdaone.kratia.collector.CollectorCRUD.BoxData
-import lambdaone.kratia.collector.{BallotMetadata, BinaryProposal, Collector, CollectorCRUD}
+import lambdaone.kratia.collector._
 import lambdaone.kratia.registry.{Community, Member, Registry, RegistryCRUD}
 import lambdaone.toolbox.UniqueGen
 import lambdaone.toolbox.mem.CRUDPickInMem
@@ -15,11 +15,11 @@ import io.circe.Json
 import io.circe.syntax._
 import lambdaone.kratia.protocol.MemberData.Nickname
 import lambdaone.kratia.protocol.RegistryProtocol.{RegisterRequest, RegisterResponse}
-import org.http4s.circe.{jsonEncoderOf, jsonOf, jsonEncoder}
+import org.http4s.circe.{jsonEncoder, jsonEncoderOf, jsonOf}
 import org.http4s._
 import org.http4s.dsl.io._
 import io.circe.generic.auto._
-import lambdaone.kratia.protocol.CollectorProtocol.{CreateBallotBoxRequest, CreateBallotBoxResponse}
+import lambdaone.kratia.protocol.CollectorProtocol.{CreateBallotBoxRequest, CreateBallotBoxResponse, SetVoteRequest, SetVoteResponse}
 import org.http4s.headers
 import org.http4s.server.Router
 
@@ -105,6 +105,22 @@ case class Kratia(
         for {
           list <- collector.list
           ok <- Ok(Json.obj("data" -> list.asJson))
+        } yield ok
+      }
+
+    case request @ POST -> Root / "collector" / "vote" =>
+
+      implicit val decoder: EntityDecoder[IO, SetVoteRequest[UUID, BinaryProposal]] =
+        jsonOf[IO, SetVoteRequest[UUID, BinaryProposal]]
+      implicit val encoder: EntityEncoder[IO, SetVoteResponse[UUID]] =
+        jsonEncoderOf[IO, SetVoteResponse[UUID]]
+
+      auth(request) { case (member, _) =>
+        for {
+          req <- request.as[SetVoteRequest[UUID, BinaryProposal]]
+          vote = Vote[UUID, BinaryProposal](member.address, req.vote)
+          proof <- collector.vote(req.ballotBox, vote)
+          ok <- Ok(SetVoteResponse(proof.proof))
         } yield ok
       }
   }
