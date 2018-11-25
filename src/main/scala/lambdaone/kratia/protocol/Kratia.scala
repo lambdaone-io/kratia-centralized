@@ -22,6 +22,10 @@ import io.circe.generic.auto._
 import lambdaone.kratia.protocol.CollectorProtocol.{CreateBallotBoxRequest, CreateBallotBoxResponse, SetVoteRequest, SetVoteResponse}
 import org.http4s.headers
 import org.http4s.server.Router
+import org.http4s.server.middleware._
+
+import cats.effect.implicits._
+import scala.concurrent.duration._
 
 /**
   * Current unique community 19ce7b9b-a4da-4f9c-9838-c04fcb0ce9db
@@ -34,8 +38,16 @@ case class Kratia(
 
   val rootCommunity: Community[UUID, MemberData] = Community(UUID.fromString("19ce7b9b-a4da-4f9c-9838-c04fcb0ce9db"))
 
+  val corsConfig: CORSConfig =
+    CORSConfig(
+      anyOrigin = false,
+      allowedOrigins = Set("http://localhost:8000", "http://demo.lambdaone.io"),
+      allowCredentials = true,
+      maxAge = 1.day.toSeconds
+    )
+
   def app: HttpApp[IO] = {
-    Router("/api/v1" -> (v1registry <+> v1collector)).orNotFound
+    Router("/api/v1" -> CORS(v1registry <+> v1collector, corsConfig)).orNotFound
   }
 
   def auth(request: Request[IO])(program: (Member[UUID, MemberData], MemberData) => IO[Response[IO]]): IO[Response[IO]] = {
