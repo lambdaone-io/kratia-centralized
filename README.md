@@ -14,3 +14,9 @@ There are several exciting industries which would benefit: open software project
 # About the code
 
 This is the "centralized" version, it is a traditional service with a websockets API to interact with the protocol.
+
+# Run
+
+`sbt run`
+
+Check `docs/postman` jsons for postman collections
