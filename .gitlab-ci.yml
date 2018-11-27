@@ -57,6 +57,7 @@ job-deploy:
   script:
     - mkdir ~/.kube
     - echo $KUBE_CONFIG | base64 --decode > ~/.kube/config
+    - cat ~/.kube/config
     - kubectl get nodes
     - sed -e s@%VERSION%@$CI_COMMIT_SHA@g -e s@%APP_NAME%@$APP_NAME@g -e s@%REGISTRY%@$REGISTRY@g k8s/k8s-deployment.yml > k8s-deployment-latest.yml
     - kubectl apply -f k8s-deployment-latest.yml
