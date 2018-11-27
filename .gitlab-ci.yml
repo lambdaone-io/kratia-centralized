@@ -18,7 +18,7 @@ variables:
 
 job-build:
   stage: build
-  image: hseeberger/scala-sbt
+  image: hseeberger/scala-sbt:8u181_2.12.7_1.2.6
   script:
     - sbt assembly
   only:
