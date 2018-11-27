@@ -20,7 +20,7 @@ job-build:
   stage: build
   image: java:openjdk-8
   script:
-    - sbt package
+    - sbt assembly
   only:
     - ci
     - master
