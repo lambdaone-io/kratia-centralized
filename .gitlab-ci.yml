@@ -28,8 +28,9 @@ job-build:
     - docker
   cache:
     paths:
-      - build
+      - target
       - ~/.ivy2
+      - ~/.sbt
 
 job-publish:
   stage: publish
