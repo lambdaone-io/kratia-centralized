@@ -18,7 +18,7 @@ variables:
 
 job-build:
   stage: build
-  image: java:openjdk-8
+  image: hseeberger/scala-sbt
   script:
     - sbt assembly
   only:
