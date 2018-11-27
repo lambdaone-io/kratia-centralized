@@ -16,6 +16,6 @@ spec:
           requests:
             cpu: 150m
         ports:
-        - containerPort: 9000
+        - containerPort: 8080
       imagePullSecrets:
       - name: regcred

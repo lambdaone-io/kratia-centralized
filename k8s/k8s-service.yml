@@ -6,7 +6,7 @@ spec:
   type: NodePort
   ports:
     - name: kratia-centralized
-      port: 9000
-      targetPort: 9000
+      port: 8080
+      targetPort: 8080
   selector:
     app: kratia-centralized
