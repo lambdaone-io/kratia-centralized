@@ -41,7 +41,7 @@ case class Kratia(
   val corsConfig: CORSConfig =
     CORSConfig(
       anyOrigin = false,
-      allowedOrigins = Set("http://localhost:8000", "http://demo.lambdaone.io"),
+      allowedOrigins = Set("http://localhost:8000", "http://demo.lambdaone.io", "http://kratia.127.0.0.1.xip.io:9090"),
       allowCredentials = true,
       maxAge = 1.day.toSeconds
     )
