@@ -3,6 +3,8 @@ package lambdaone.toolbox.sql
 import cats.effect.IO
 import cats.implicits._
 import doobie.Transactor
+import lambdaone.kratia.protocol.MemberData
+import lambdaone.kratia.protocol.MemberData.Nickname
 import lambdaone.kratia.registry.Member
 import org.scalacheck.Gen
 import org.scalatest.prop.PropertyChecks
@@ -16,7 +18,7 @@ object EntityGenerators {
   type Data = String
 
   val addressGen: Gen[Address] = Gen.uuid.map(_.toString)
-  val memberGen: Gen[Member[Address, Data]] = addressGen.map(Member(_))
+  val memberdataGen: Gen[MemberData] = Gen.alphaStr.map(s => MemberData(Nickname(s)))
 
 }
 
@@ -36,15 +38,15 @@ class CrudPickSqlRegistryTest extends FlatSpec with PropertyChecks with Matchers
   }
 
   "Getting non-stored mambers" should "deliver no result" in {
-    forAll(addressGen, memberGen) { (address: Address, member: Member[Address, Data]) =>
-      store.get((address, member.address)).unsafeRunSync shouldBe None
+    forAll(addressGen, addressGen) { (community: Address, member: Address) =>
+      store.get((community, member)).unsafeRunSync shouldBe None
     }
   }
 
   "Stored members" should "be available to get" in {
-    forAll(addressGen, memberGen) { (address: Address, member: Member[Address, Data]) =>
-      val key = (address, member.address)
-      ( store.create(member, key) *> store.get(key) ).unsafeRunSync shouldBe Some(member)
+    forAll(addressGen, addressGen, memberdataGen) { (community: Address, member: Address, memberdata: MemberData) =>
+      val key = (community, member)
+      ( store.create(memberdata, key) *> store.get(key) ).unsafeRunSync shouldBe Some(memberdata)
     }
   }
 

@@ -6,7 +6,7 @@ import doobie.implicits._
 import lambdaone.kratia.collector.CollectorCRUD.BoxData
 import lambdaone.toolbox.CRUDPick
 
-object CrudPickSqlRegistry {
+object CrudPickSqlCollector {
 
   def createTable[F[_] : Monad](implicit xa: Transactor[F]) =
     sql"create table collector (community varchar(255), member varchar(255))".update.run.transact(xa)

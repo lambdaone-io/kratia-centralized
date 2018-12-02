@@ -6,7 +6,7 @@ import lambdaone.toolbox.CRUDPick
 
 object Registry {
 
-  implicit def apply[F[_]: Monad, A, D](implicit query: CRUDPick[F, (A, A), D]): Registry[F, A, D] =
+  implicit def apply[F[_]: Monad, A, D](query: CRUDPick[F, (A, A), D]): Registry[F, A, D] =
     new RegistryCRUD[F, A, D](query)
 }
 
