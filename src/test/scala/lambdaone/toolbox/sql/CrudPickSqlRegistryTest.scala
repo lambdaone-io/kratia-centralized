@@ -20,35 +20,31 @@ object EntityGenerators {
 
 }
 
-class CRUDStoreSqlTest extends FlatSpec with PropertyChecks with Matchers with BeforeAndAfter {
+class CrudPickSqlRegistryTest extends FlatSpec with PropertyChecks with Matchers with BeforeAndAfter {
 
   import EntityGenerators._
 
   implicit val cs = IO.contextShift(ExecutionContext.global)
 
   implicit val xa = Transactor
-    .fromDriverManager[IO]("org.postgresql.Driver", "jdbc:postgresql:world", "postgres", "")
-  //      .fromDriverManager[IO]("org.h2.Driver", "jdbc:h2:mem:")
+    .fromDriverManager[IO]("org.h2.Driver", "jdbc:h2:mem:kratia;DB_CLOSE_DELAY=-1")
 
-
-  val store = CRUDStoreSql.crudPickSqlRegistry[IO, Address, Data]
+  val store = CrudPickSqlRegistry[IO, Address, Data]
 
   before {
-    ( CRUDStoreSql.dropTable[IO] *> CRUDStoreSql.createTable[IO] ).unsafeRunSync()
+    ( CrudPickSqlRegistry.dropTable[IO] *> CrudPickSqlRegistry.createTable[IO] ).unsafeRunSync()
   }
 
-  "Creating members" should "work" in {
+  "Getting non-stored mambers" should "deliver no result" in {
     forAll(addressGen, memberGen) { (address: Address, member: Member[Address, Data]) =>
-      val result: IO[(Address, Address)] = store.create(member, (address, member.address))
-      result.unsafeRunSync shouldBe(address, member.address)
+      store.get((address, member.address)).unsafeRunSync shouldBe None
     }
   }
 
-
-  "Stored members" should "be read back" in {
+  "Stored members" should "be available to get" in {
     forAll(addressGen, memberGen) { (address: Address, member: Member[Address, Data]) =>
       val key = (address, member.address)
-      ( store.create(member, key) *> store.get(key) ).unsafeRunSync shouldBe member
+      ( store.create(member, key) *> store.get(key) ).unsafeRunSync shouldBe Some(member)
     }
   }
 
