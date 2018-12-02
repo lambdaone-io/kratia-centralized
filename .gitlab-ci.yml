@@ -1,0 +1,67 @@
+
+services:
+  - docker:dind
+
+before_script:
+
+after_script:
+
+stages:
+  - build
+  - publish
+  - test
+  - deploy
+
+variables:
+  REGISTRY: registry.gitlab.com/kolov
+  APP_NAME: kratia-centralized
+
+job-build:
+  stage: build
+  image: hseeberger/scala-sbt:8u181_2.12.7_1.2.6
+  script:
+    - sbt assembly
+  only:
+    - ci
+    - master
+  tags:
+    - docker
+  cache:
+    paths:
+      - target
+      - ~/.ivy2
+      - ~/.sbt
+
+job-publish:
+  stage: publish
+  image: docker:dind
+  script:
+    - cp Dockerfile target/scala-2.12
+    - docker build -t $REGISTRY/$APP_NAME:$CI_COMMIT_SHA target/scala-2.12
+    - docker login -u gitlab-ci-token -p $CI_BUILD_TOKEN registry.gitlab.com
+    - docker push $REGISTRY/$APP_NAME:$CI_COMMIT_SHA
+    - docker tag  $REGISTRY/$APP_NAME:$CI_COMMIT_SHA $REGISTRY/$APP_NAME:master
+    - docker push $REGISTRY/$APP_NAME:master
+  only:
+    - ci
+    - master
+  tags:
+    - docker
+  cache:
+    paths:
+      - dist
+
+job-deploy:
+  stage: deploy
+  image: google/cloud-sdk:latest
+  script:
+    - mkdir ~/.kube
+    - echo $KUBE_CONFIG | base64 --decode > ~/.kube/config
+    - sed -e s@%VERSION%@$CI_COMMIT_SHA@g -e s@%APP_NAME%@$APP_NAME@g -e s@%REGISTRY%@$REGISTRY@g k8s/k8s-deployment.yml > k8s-deployment-latest.yml
+    - kubectl apply -f k8s-deployment-latest.yml
+    - kubectl apply -f k8s/k8s-service.yml
+  only:
+    - ci
+    - master
+  tags:
+    - docker

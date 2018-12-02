@@ -1,0 +1,21 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: kratia-centralized
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: kratia-centralized
+    spec:
+      containers:
+      - name: kratia-centralized
+        image: %REGISTRY%/%APP_NAME%:%VERSION%
+        resources:
+          requests:
+            cpu: 150m
+        ports:
+        - containerPort: 8080
+      imagePullSecrets:
+      - name: regcred
