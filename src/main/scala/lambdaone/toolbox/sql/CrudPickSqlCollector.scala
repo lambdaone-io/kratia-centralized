@@ -14,7 +14,8 @@ object CrudPickSqlCollector {
   def dropTable[F[_] : Monad](implicit xa: Transactor[F]) =
     sql"drop table if exists collector".update.run.transact(xa)
 
-  def apply[F[_] : Monad, A: Read : Put, P, D](implicit xa: Transactor[F]) = new CRUDPick[F, A, BoxData[A, P, D]] {
+  def apply[F[_] : Monad, A: Read : Put, P, D](implicit xa: Transactor[F])
+  = new CRUDPick[F, A, BoxData[A, P, D]] {
     /** Stores `a` with the chosen new unique reference */
     override def create(a: BoxData[A, P, D], id: A): F[A] = ???
 

@@ -1,8 +1,8 @@
 package lambdaone.kratia
 
-import cats.implicits._
 import cats.effect.{ExitCode, IO, IOApp}
-import lambdaone.kratia.protocol.{KratiaInDb, KratiaInMem}
+import cats.implicits._
+import lambdaone.kratia.protocol.KratiaInDb
 import org.http4s.server.blaze._
 
 object Main extends IOApp {

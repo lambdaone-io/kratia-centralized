@@ -6,10 +6,17 @@ import doobie._
 import doobie.implicits._
 import lambdaone.kratia.protocol.MemberData
 import lambdaone.kratia.protocol.MemberData.Nickname
-import lambdaone.kratia.registry.Member
 import lambdaone.toolbox.CRUDPick
 
 object CrudPickSqlRegistry {
+
+//  def init[F[_] : Monad](implicit xa: Transactor[F]): F[Unit] = createTable[F](_ => ()) // Why isn't this compiling?
+
+  def createTable[F[_] : Monad](implicit xa: Transactor[F]): F[Int] =
+    sql"create table registry (community varchar(255), member varchar(255), nickname varchar(255))".update.run.transact(xa)
+
+  def dropTable[F[_] : Monad](implicit xa: Transactor[F]): F[Int] =
+    sql"drop table if exists registry".update.run.transact(xa)
 
   def apply[F[_] : Monad, A: Read : Put, D]
   (implicit xa: Transactor[F])
@@ -25,7 +32,7 @@ object CrudPickSqlRegistry {
     /** Uses a reference to try to delete the data, returns it if successful */
     override def delete(id: (A, A)): F[Option[MemberData]] = sql"delete from registry where community = ${id._1} and member = ${id._2}".update.run
       .transact(xa).map {
-      case 1 => None // FIXME
+      case 1 => None // FIXME. Maybe we should change the `delete` signature
       case _ => None
     }
 
@@ -47,11 +54,7 @@ object CrudPickSqlRegistry {
     }
   }
 
-  def createTable[F[_] : Monad](implicit xa: Transactor[F]): F[Int] =
-    sql"create table registry (community varchar(255), member varchar(255), nickname varchar(255))".update.run.transact(xa)
 
-  def dropTable[F[_] : Monad](implicit xa: Transactor[F]): F[Int] =
-    sql"drop table if exists registry".update.run.transact(xa)
 
 
 }

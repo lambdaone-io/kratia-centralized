@@ -4,7 +4,7 @@ import java.util.UUID
 
 import cats.effect.IO
 import lambdaone.kratia.collector.BinaryProposal.{No, Yes}
-import lambdaone.kratia.protocol.KratiaInMem
+import lambdaone.kratia.protocol.{KratiaInMem}
 import org.scalatest.FlatSpec
 
 class CollectorSpec extends FlatSpec {
