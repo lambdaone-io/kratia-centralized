@@ -61,13 +61,13 @@ object KratiaInDb {
   def inDb: IO[KratiaService] =
     for {
       registry <- buildDbRegistry
-      collector <- buildInMemCollector
+      collector <- buildInDbCollector
     } yield KratiaService(UniqueGen.UniqueGenUUID, registry, collector)
 
   val clock = Clock.create[IO]
 
-  val crudCollector = CrudPickSqlCollector[IO, UUID, BinaryProposal, String]
+  val crudSqlCollector = CrudPickSqlCollector[IO, UUID,  String]
 
-  def buildInMemCollector: IO[Collector[IO, UUID, BinaryProposal, String]] =
-    IO.pure(CollectorCRUD[IO, UUID, BinaryProposal, String](clock, crudCollector, UniqueGen.UniqueGenUUID))
+  def buildInDbCollector: IO[Collector[IO, UUID, BinaryProposal, String]] =
+    IO.pure(CollectorCRUD[IO, UUID, BinaryProposal, String](clock, crudSqlCollector, UniqueGen.UniqueGenUUID))
 }

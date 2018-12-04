@@ -5,7 +5,6 @@ import cats.implicits._
 import doobie.Transactor
 import lambdaone.kratia.protocol.MemberData
 import lambdaone.kratia.protocol.MemberData.Nickname
-import lambdaone.kratia.registry.Member
 import org.scalacheck.Gen
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.{BeforeAndAfter, FlatSpec, Matchers}
