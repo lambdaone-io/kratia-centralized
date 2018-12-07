@@ -131,7 +131,11 @@ object CrudPickSqlCollector {
     }
 
     /** Uses a reference to try to delete the data, returns it if successful */
-    override def delete(id: A): F[Option[BoxData[A, BinaryProposal, D]]] = ???
+    override def delete(id: A): F[Option[BoxData[A, BinaryProposal, D]]] =
+      (sql"delete from ballotbox_binary where id = $id".update.run
+        *> sql"delete from votes_binary where box = $id".update.run)
+        .transact(xa)
+        .map(_ => None) // FIXME: returning Option[A] is costly and probably not necessary; reiew the API
 
     /** Returns all data within the store */
     override def all: F[Map[A, BoxData[A, BinaryProposal, D]]] = ???

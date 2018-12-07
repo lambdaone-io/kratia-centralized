@@ -108,6 +108,14 @@ class CrudPickSqlCollectorTest
     }
   }
 
+  "Stored ballot box without votes" should "be gone after deletion" in {
+    forAll(addressGen, emptyBoxDataGen) { (a, boxData) =>
+      (store.create(boxData, a) *>
+        store.delete(a) *>
+        store.get(a)).unsafeRunSync() shouldBe None
+    }
+  }
+
   "Stored ballot box with 1 vote" should "be read back OK" in {
     forAll(addressGen, boxDataWithOneVoteGen) { (a, boxData) =>
       (store.create(boxData, a) *>
