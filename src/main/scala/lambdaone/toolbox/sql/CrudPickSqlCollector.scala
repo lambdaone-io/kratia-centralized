@@ -93,8 +93,10 @@ object CrudPickSqlCollector {
 
     }
 
-    /** Uses a reference to try to look for the data in the store, if found, applies `f` and stores the result,
-      * returns the new version if the data if successful */
+
+    /**
+    * This looks awful and doesn't work correctly.
+      */
     override def update(id: A)(
       f: BoxData[A, BinaryProposal, D] => BoxData[A, BinaryProposal, D]
     ): F[Option[BoxData[A, BinaryProposal, D]]] = {
