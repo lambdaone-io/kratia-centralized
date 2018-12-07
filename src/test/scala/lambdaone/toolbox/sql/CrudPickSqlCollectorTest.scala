@@ -6,10 +6,11 @@ import doobie.Transactor
 import lambdaone.kratia.collector.BinaryProposal.{No, Yes}
 import lambdaone.kratia.collector.CollectorCRUD.BoxData
 import lambdaone.kratia.collector.{BinaryProposal, InfluenceAllocation}
-import org.scalacheck.Gen
+import org.scalacheck.{Gen, Shrink, ShrinkLowPriority}
 import org.scalacheck.Gen.choose
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.{BeforeAndAfter, FlatSpec, Matchers}
+import org.scalacheck.Prop._
 
 import scala.concurrent.ExecutionContext
 
@@ -61,9 +62,12 @@ class CrudPickSqlCollectorTest
     extends FlatSpec
     with PropertyChecks
     with Matchers
-    with BeforeAndAfter {
+    with BeforeAndAfter
+    with ShrinkLowPriority {
 
   import CollectorEntityGenerators._
+
+
 
   implicit val cs = IO.contextShift(ExecutionContext.global)
 
@@ -87,19 +91,21 @@ class CrudPickSqlCollectorTest
     }
   }
 
-//  "Adding votes" should "work" in {
-//    forAll(addressGen, addressGen, addressGen, boxDataWithOneVoteGen) {
-//      (a: Address,
-//       voter: Address,
-//       proof: Address,
-//       boxData: BoxData[Address, BinaryProposal, String]) =>
-//        (store.create(boxData, a) *>
-//          store.update(a)(
-//            bd => bd.copy(votes = bd.votes + ( (voter, (proof, InfluenceAllocation(Map(BinaryProposal.Yes -> 1.0, BinaryProposal.No -> 0.0))
-//                    )) )))
-//          ).unsafeRunSync() shouldBe a
-//    }
-//  }
+  "Adding votes" should "work" in {
+    def addVote( boxData: BoxData[Address, BinaryProposal, String], voter: Address, proof: Address) =
+      boxData.copy(votes = boxData.votes + ( (voter, (proof, InfluenceAllocation(Map(Yes -> 1.0, No -> 0.0))))))
+
+    forAll(addressGen, addressGen, addressGen, boxDataWithOneVoteGen) {
+      (a: Address,
+       voter: Address,
+       proof: Address,
+       boxData: BoxData[Address, BinaryProposal, String]) =>
+        (store.create(boxData, a) *>
+          store.update(a)(bd => addVote(bd, voter, proof))).unsafeRunSync() shouldBe Some(
+          addVote(boxData, voter, proof)
+        )
+    }
+  }
 
   "Stored ballot box without votes" should "be read back OK" in {
     forAll(addressGen, emptyBoxDataGen) { (a, boxData) =>

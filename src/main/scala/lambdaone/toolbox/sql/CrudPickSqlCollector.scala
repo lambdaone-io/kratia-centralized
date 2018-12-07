@@ -93,9 +93,8 @@ object CrudPickSqlCollector {
 
     }
 
-
     /**
-    * This looks awful and doesn't work correctly.
+      * This looks awful
       */
     override def update(id: A)(
       f: BoxData[A, BinaryProposal, D] => BoxData[A, BinaryProposal, D]
@@ -113,7 +112,7 @@ object CrudPickSqlCollector {
             case (member, (proof, InfluenceAllocation(ia))) =>
               val yes: Double = ia.get(BinaryProposal.Yes).getOrElse(0.0)
               val no: Double = ia.get(BinaryProposal.No).getOrElse(0.0)
-              sql"insert into votes_binary (box, member, proof, yes, no) values ($id, ${member}, ${proof}, ${yes} ${no})".update.run
+              sql"insert into votes_binary (box, member, proof, yes, no) values ($id, ${member}, ${proof}, ${yes}, ${no})".update.run
           }
           val deleted: Set[doobie.ConnectionIO[Int]] = removedVotes.map {
             case (member, _) =>
