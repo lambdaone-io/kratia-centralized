@@ -66,8 +66,6 @@ object KratiaInDb {
 
   val clock = Clock.create[IO]
 
-  implicit val readBox: Get[BoxData[UUID, BinaryProposal, String]] = ???
-
   val crudSqlCollector = CrudPickSqlCollector[IO, UUID,  String]
 
   def buildInDbCollector: IO[Collector[IO, UUID, BinaryProposal, String]] =
