@@ -33,7 +33,7 @@ class CrudPickSqlRegistryTest extends FlatSpec with PropertyChecks with Matchers
   val store = CrudPickSqlRegistry[IO, Address, Data]
 
   before {
-    ( CrudPickSqlRegistry.dropTable[IO] *> CrudPickSqlRegistry.createTable[IO] ).unsafeRunSync()
+    ( CrudPickSqlRegistry.dropTable[IO] *> CrudPickSqlRegistry.init[IO] ).unsafeRunSync()
   }
 
   "Getting non-stored mambers" should "deliver no result" in {

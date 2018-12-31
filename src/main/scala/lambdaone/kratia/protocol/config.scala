@@ -15,7 +15,6 @@ import lambdaone.toolbox.sql.{CrudPickSqlCollector, CrudPickSqlRegistry}
 
 import scala.concurrent.ExecutionContext
 
-
 object KratiaInMem {
 
   def inMem: IO[KratiaService] =
@@ -33,10 +32,16 @@ object KratiaInMem {
 
   def buildInMemCollector: IO[Collector[IO, UUID, BinaryProposal, String]] =
     for {
-      store <- Ref.of[IO, Map[UUID, BoxData[UUID, BinaryProposal, String]]](Map.empty)
+      store <- Ref.of[IO, Map[UUID, BoxData[UUID, BinaryProposal, String]]](
+        Map.empty
+      )
       clock = Clock.create[IO]
       crud = CRUDPickInMem(store)
-      collector = CollectorCRUD[IO, UUID, BinaryProposal, String](clock, crud, UniqueGen.UniqueGenUUID)
+      collector = CollectorCRUD[IO, UUID, BinaryProposal, String](
+        clock,
+        crud,
+        UniqueGen.UniqueGenUUID
+      )
     } yield collector
 }
 
@@ -45,29 +50,39 @@ object KratiaInDb {
   implicit val cs = IO.contextShift(ExecutionContext.global)
 
   implicit val xa = Transactor
-    .fromDriverManager[IO]("org.h2.Driver", "jdbc:h2:mem:kratia;DB_CLOSE_DELAY=-1")
+    .fromDriverManager[IO](
+      "org.h2.Driver",
+      "jdbc:h2:mem:kratia;DB_CLOSE_DELAY=-1"
+    )
 
   implicit val uuidGet: Get[UUID] = Get[String].map(UUID.fromString(_))
   implicit val uuidPut: Put[UUID] = Put[String].contramap(_.toString)
 
   def buildDbRegistry: IO[Registry[IO, UUID, MemberData]] =
     for {
-      _ <- CrudPickSqlRegistry.createTable[IO]
+      _ <- CrudPickSqlRegistry.init[IO]
       query = CrudPickSqlRegistry[IO, UUID, MemberData]
       reg = RegistryCRUD(query)
     } yield reg
 
-
   def inDb: IO[KratiaService] =
     for {
       registry <- buildDbRegistry
-      collector <- buildInDbCollector
+      collector <- buildDbCollector
     } yield KratiaService(UniqueGen.UniqueGenUUID, registry, collector)
 
   val clock = Clock.create[IO]
 
-  val crudSqlCollector = CrudPickSqlCollector[IO, UUID,  String]
+  val crudSqlCollector = CrudPickSqlCollector[IO, UUID, String]
 
-  def buildInDbCollector: IO[Collector[IO, UUID, BinaryProposal, String]] =
-    IO.pure(CollectorCRUD[IO, UUID, BinaryProposal, String](clock, crudSqlCollector, UniqueGen.UniqueGenUUID))
+  def buildDbCollector: IO[Collector[IO, UUID, BinaryProposal, String]] =
+    for {
+      _ <- CrudPickSqlCollector.init[IO]
+      crudSqlCollector = CrudPickSqlCollector[IO, UUID, String]
+      coll = CollectorCRUD[IO, UUID, BinaryProposal, String](
+        clock,
+        crudSqlCollector,
+        UniqueGen.UniqueGenUUID
+      )
+    } yield coll
 }

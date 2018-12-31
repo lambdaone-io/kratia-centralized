@@ -10,9 +10,7 @@ import lambdaone.toolbox.CRUDPick
 
 object CrudPickSqlRegistry {
 
-//  def init[F[_] : Monad](implicit xa: Transactor[F]): F[Unit] = createTable[F](_ => ()) // Why isn't this compiling?
-
-  def createTable[F[_] : Monad](implicit xa: Transactor[F]): F[Int] =
+  def init[F[_] : Monad](implicit xa: Transactor[F]): F[Int] =
     sql"create table registry (community varchar(255), member varchar(255), nickname varchar(255))".update.run.transact(xa)
 
   def dropTable[F[_] : Monad](implicit xa: Transactor[F]): F[Int] =

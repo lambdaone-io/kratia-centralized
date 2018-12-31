@@ -6,6 +6,7 @@ import doobie._
 import doobie.implicits._
 import lambdaone.kratia.collector.CollectorCRUD.{AllVotes, BoxData}
 import lambdaone.kratia.collector.{
+  BallotBox,
   BinaryProposal,
   InfluenceAllocation,
   Timestamp
@@ -30,11 +31,11 @@ object CrudPickSqlCollector {
   ) = new CRUDPick[F, A, BoxData[A, BinaryProposal, D]] {
 
     /** Stores `a` with the chosen new unique reference */
-    override def create(a: BoxData[A, BinaryProposal, D], id: A): F[A] = {
-      sql"insert into ballotbox_binary (id, data, closes_on) values ($id, ${a.data}, ${a.closedOn})".update.run
+    override def create(boxData: BoxData[A, BinaryProposal, D], id: A): F[A] = {
+      sql"insert into ballotbox_binary (id, data, closes_on) values ($id, ${boxData.data}, ${boxData.closedOn})".update.run
         .flatMap {
           case 1 =>
-            a.votes
+            boxData.votes
               .map {
                 case (member, (proof, InfluenceAllocation(ia))) =>
                   val yes: Double = ia.get(BinaryProposal.Yes).getOrElse(0.0)
@@ -139,7 +140,22 @@ object CrudPickSqlCollector {
         .map(_ => None) // FIXME: returning Option[A] is costly and probably not necessary; reiew the API
 
     /** Returns all data within the store */
-    override def all: F[Map[A, BoxData[A, BinaryProposal, D]]] = ???
+    override def all: F[Map[A, BoxData[A, BinaryProposal, D]]] = {
+
+      sql"select id, closes_on, data from ballotbox_binary "
+        .query[(A, Timestamp, D)]
+        .map {
+          case (id, ts, d) =>
+            (
+              id,
+              BoxData[A, BinaryProposal, D](BinaryProposal.ballot, ts, d, Map())
+            )
+        }
+        .to[List]
+        .transact(xa)
+        .map(_.toMap)
+
+    }
   }
 
 }

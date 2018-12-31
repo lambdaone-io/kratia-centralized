@@ -67,8 +67,6 @@ class CrudPickSqlCollectorTest
 
   import CollectorEntityGenerators._
 
-
-
   implicit val cs = IO.contextShift(ExecutionContext.global)
 
   implicit val xa = Transactor
@@ -92,8 +90,17 @@ class CrudPickSqlCollectorTest
   }
 
   "Adding votes" should "work" in {
-    def addVote( boxData: BoxData[Address, BinaryProposal, String], voter: Address, proof: Address) =
-      boxData.copy(votes = boxData.votes + ( (voter, (proof, InfluenceAllocation(Map(Yes -> 1.0, No -> 0.0))))))
+    def addVote(boxData: BoxData[Address, BinaryProposal, String],
+                voter: Address,
+                proof: Address) =
+      boxData.copy(
+        votes = boxData.votes + (
+          (
+            voter,
+            (proof, InfluenceAllocation(Map(Yes -> 1.0, No -> 0.0)))
+          )
+        )
+      )
 
     forAll(addressGen, addressGen, addressGen, boxDataWithOneVoteGen) {
       (a: Address,
@@ -101,9 +108,8 @@ class CrudPickSqlCollectorTest
        proof: Address,
        boxData: BoxData[Address, BinaryProposal, String]) =>
         (store.create(boxData, a) *>
-          store.update(a)(bd => addVote(bd, voter, proof))).unsafeRunSync() shouldBe Some(
-          addVote(boxData, voter, proof)
-        )
+          store.update(a)(bd => addVote(bd, voter, proof)))
+          .unsafeRunSync() shouldBe Some(addVote(boxData, voter, proof))
     }
   }
 
@@ -111,6 +117,21 @@ class CrudPickSqlCollectorTest
     forAll(addressGen, emptyBoxDataGen) { (a, boxData) =>
       (store.create(boxData, a) *>
         store.get(a)).unsafeRunSync() shouldBe Some(boxData)
+    }
+  }
+
+  "Stored 2 ballot boxes without votes" should "be read back OK" in {
+    forAll(addressGen, emptyBoxDataGen, addressGen, emptyBoxDataGen) {
+
+      (a1, boxData1, a2, boxData2) =>
+        val actual =
+          (CrudPickSqlCollector.tearDown[IO] *> CrudPickSqlCollector.init[IO] *>
+            store.create(boxData1, a1) *>
+            store.create(boxData2, a2) *>
+            store.all).unsafeRunSync()
+        val expected = Map(a1 -> boxData1, a2 -> boxData2)
+        actual shouldBe expected
+
     }
   }
 
@@ -128,6 +149,7 @@ class CrudPickSqlCollectorTest
         store.get(a)).unsafeRunSync() shouldBe Some(boxData)
     }
   }
+
   "Stored ballot box with 2 votes" should "be read back OK" in {
     forAll(addressGen, boxDataWithTwoVotesGen) { (a, boxData) =>
       (store.create(boxData, a) *>
