@@ -7,7 +7,7 @@ import cats.effect.concurrent.Ref
 import lambdaone.kratia.collector.CollectorCRUD.BoxData
 import lambdaone.kratia.collector._
 import lambdaone.kratia.registry.{Community, Member, Registry, RegistryCRUD}
-import lambdaone.toolbox.UniqueGen
+import lambdaone.toolbox.{CRUDPick, UniqueGen}
 import lambdaone.toolbox.mem.CRUDPickInMem
 import org.http4s.implicits._
 import cats.implicits._
@@ -23,18 +23,22 @@ import lambdaone.kratia.protocol.CollectorProtocol.{CreateBallotBoxRequest, Crea
 import org.http4s.headers
 import org.http4s.server.Router
 import org.http4s.server.middleware._
-
 import cats.effect.implicits._
+import doobie.util.{Get, Put, Read}
+import doobie.util.transactor.Transactor
+import lambdaone.toolbox.sql.{CrudPickSqlCollector, CrudPickSqlRegistry}
+
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
 /**
   * Current unique community 19ce7b9b-a4da-4f9c-9838-c04fcb0ce9db
   */
-case class Kratia(
-  uniqueGen: UniqueGen[IO, UUID],
-  registry: Registry[IO, UUID, MemberData],
-  collector: Collector[IO, UUID, BinaryProposal, String]
-) {
+case class KratiaService(
+                        uniqueGen: UniqueGen[IO, UUID],
+                        registry: Registry[IO, UUID, MemberData],
+                        collector: Collector[IO, UUID, BinaryProposal, String]
+                      ) {
 
   val rootCommunity: Community[UUID, MemberData] = Community(UUID.fromString("19ce7b9b-a4da-4f9c-9838-c04fcb0ce9db"))
 
@@ -70,7 +74,7 @@ case class Kratia(
 
   def v1registry: HttpRoutes[IO] = HttpRoutes.of[IO] {
 
-    case request @ POST -> Root / "registry" =>
+    case request@POST -> Root / "registry" =>
 
       implicit val decoder: EntityDecoder[IO, RegisterRequest[UUID, Nickname]] =
         jsonOf[IO, RegisterRequest[UUID, Nickname]]
@@ -86,7 +90,7 @@ case class Kratia(
         ok <- Ok(RegisterResponse(member))
       } yield ok
 
-    case request @ GET -> Root / "registry" =>
+    case request@GET -> Root / "registry" =>
       auth(request) { case (_, data) =>
         Ok(data.nickname.value)
       }
@@ -94,7 +98,7 @@ case class Kratia(
 
   def v1collector: HttpRoutes[IO] = HttpRoutes.of[IO] {
 
-    case request @ POST -> Root / "collector" =>
+    case request@POST -> Root / "collector" =>
 
       implicit val decoder: EntityDecoder[IO, CreateBallotBoxRequest[BinaryProposal, String]] =
         jsonOf[IO, CreateBallotBoxRequest[BinaryProposal, String]]
@@ -111,7 +115,7 @@ case class Kratia(
         } yield ok
       }
 
-    case request @ GET -> Root / "collector" =>
+    case request@GET -> Root / "collector" =>
 
       auth(request) { case (_, _) =>
         for {
@@ -120,7 +124,7 @@ case class Kratia(
         } yield ok
       }
 
-    case request @ POST -> Root / "collector" / "vote" =>
+    case request@POST -> Root / "collector" / "vote" =>
 
       implicit val decoder: EntityDecoder[IO, SetVoteRequest[UUID, BinaryProposal]] =
         jsonOf[IO, SetVoteRequest[UUID, BinaryProposal]]
@@ -136,28 +140,4 @@ case class Kratia(
         } yield ok
       }
   }
-}
-
-object Kratia {
-
-  def inMem: IO[Kratia] =
-    for {
-      registry <- buildInMemRegistry
-      collector <- buildInMemCollector
-    } yield Kratia(UniqueGen.UniqueGenUUID, registry, collector)
-
-  def buildInMemRegistry: IO[Registry[IO, UUID, MemberData]] =
-    for {
-      store <- Ref.of[IO, Map[(UUID, UUID), MemberData]](Map.empty)
-      crud = CRUDPickInMem(store)
-      reg = RegistryCRUD(crud)
-    } yield reg
-
-  def buildInMemCollector: IO[Collector[IO, UUID, BinaryProposal, String]] =
-    for {
-      store <- Ref.of[IO, Map[UUID, BoxData[UUID, BinaryProposal, String]]](Map.empty)
-      clock = Clock.create[IO]
-      crud = CRUDPickInMem(store)
-      collector = CollectorCRUD[IO, UUID, BinaryProposal, String](clock, crud, UniqueGen.UniqueGenUUID)
-    } yield collector
 }
