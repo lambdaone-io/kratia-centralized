@@ -36,26 +36,25 @@ trait TemporalPriorityQueue[A] {
 
   def isEmpty: IO[Boolean] = size.map(_ == 0)
 
-  def enqueue(data: A): IO[FiniteDuration] =
+  def enqueue(data: A, ttw: FiniteDuration): IO[FiniteDuration] =
     for {
-      nowMillis <- timer.clock.realTime(MILLISECONDS)
-      ttw = timeToWait(1)
-      _ <- execEnqueue(data, nowMillis + ttw.toMillis)
+      now <- timer.clock.realTime(SECONDS)
+      _ <- execEnqueue(data, now + ttw.toSeconds)
     } yield ttw
 
   def dequeue(amount: Int): IO[List[QueueItem[A]]] =
     for {
-      nowMillis <- timer.clock.realTime(MILLISECONDS)
-      _ <- execStaleCheck(nowMillis)
-      data <- execDequeue(nowMillis, staleTime(nowMillis), amount)
+      now <- timer.clock.realTime(SECONDS)
+      _ <- execStaleCheck(now)
+      data <- execDequeue(now, staleTime(now), amount)
     } yield data
 
   def requeue(data: QueueItem[A]): IO[FiniteDuration] =
     for {
-      nowMillis <- timer.clock.realTime(MILLISECONDS)
+      now <- timer.clock.realTime(SECONDS)
       next = data.successor
       ttw = timeToWait(next.iteration)
-      _ <- execRequeue(next, nowMillis + ttw.toMillis)
+      _ <- execRequeue(next, now + ttw.toSeconds)
     } yield ttw
 
   def delete(data: A): IO[Unit] =
@@ -65,7 +64,7 @@ trait TemporalPriorityQueue[A] {
     initialTimeToWait * Math.pow(incrementFactor.toDouble, (iteration - 1).toDouble).toLong
 
   private def staleTime(now: Long): Long =
-    now + tolerance.toMillis
+    now + tolerance.toSeconds
 }
 
 object TemporalPriorityQueue {

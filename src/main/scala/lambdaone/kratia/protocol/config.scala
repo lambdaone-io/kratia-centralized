@@ -2,27 +2,30 @@ package lambdaone.kratia.protocol
 
 import java.util.UUID
 
-import cats.effect.{Clock, IO}
+import cats.effect.{Clock, ContextShift, IO, Timer}
 import cats.effect.concurrent.Ref
 import doobie.util.{Get, Put}
 import doobie.util.transactor.Transactor
 import lambdaone.kratia.collector.{Collector, CollectorCRUD}
 import lambdaone.kratia.collector.CollectorCRUD.BoxData
-import lambdaone.kratia.collector.Proposal.BinaryProposal
 import lambdaone.kratia.registry.{Community, Member, Registry, RegistryCRUD}
+import lambdaone.kratia.resolution.{Resolution, Resolved, ResolvedCRUD}
+import lambdaone.toolbox.TemporalPriorityQueue.QueueItem
 import lambdaone.toolbox.UniqueGen
-import lambdaone.toolbox.mem.CRUDPickInMem
-import lambdaone.toolbox.sql.{CrudPickSqlCollector, CrudPickSqlRegistry}
+import lambdaone.toolbox.mem.{CRUDPickInMem, TemporalPriorityQueueInMem}
 
 import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
 
 object KratiaInMem {
 
-  def inMem: IO[KratiaService] =
+  def inMem(implicit timer: Timer[IO], cs: ContextShift[IO]): IO[KratiaService] =
     for {
       registry <- buildInMemRegistry
       collector <- buildInMemCollector
-    } yield KratiaService(UniqueGen.UniqueGenUUID, registry, collector)
+      resolved <- buildInMemResolved
+      queue <- buildResolutionQueue(timer)
+    } yield KratiaService(UniqueGen.UniqueGenUUID, registry, collector, resolved, queue)
 
   def buildInMemRegistry: IO[Registry[IO, MemberData]] =
     for {
@@ -38,6 +41,26 @@ object KratiaInMem {
       crud = CRUDPickInMem(store)
       collector = CollectorCRUD[IO](clock, crud, UniqueGen.UniqueGenUUID)
     } yield collector
+
+  def buildInMemResolved: IO[Resolved[IO]] =
+    for {
+      store <- Ref.of[IO, Map[UUID, Resolution]](Map.empty)
+      clock = Clock.create[IO]
+      crud = CRUDPickInMem(store)
+      resolved = ResolvedCRUD[IO](crud)
+    } yield resolved
+
+  def buildResolutionQueue(timer: Timer[IO]): IO[TemporalPriorityQueueInMem[UUID]] =
+    for {
+      ref <- Ref.of[IO, (List[(QueueItem[UUID], Long)], List[(QueueItem[UUID], Long)])](List.empty -> List.empty)
+      queue = TemporalPriorityQueueInMem[UUID](
+        t = timer,
+        store = ref,
+        initialTimeToWait = 1.second,
+        tolerance = 3.second,
+        incrementFactor = 1
+      )
+    } yield queue
 }
 
 object KratiaInDb {

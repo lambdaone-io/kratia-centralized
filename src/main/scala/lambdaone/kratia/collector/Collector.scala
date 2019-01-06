@@ -8,7 +8,7 @@ trait Collector[F[_]] {
 
   def validateVote(ballotBox: BallotBox, proofOfVote: ProofOfVote): F[Boolean]
 
-  def inspect(ballotBox: BallotBox): F[InfluenceAllocation]
+  def inspect(ballotBox: BallotBox): F[DecisionResults]
 
   def listOpen: F[List[BallotMetadata]]
 }
