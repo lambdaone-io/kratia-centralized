@@ -2,18 +2,16 @@ package lambdaone.kratia.collector
 
 import cats.data.NonEmptyList
 import io.circe.{Decoder, Encoder}
+import lambdaone.kratia.collector.Proposal.BinaryProposal
 
-/**
-  *
-  * @tparam P proposal type
-  */
-case class Ballot[P](p: NonEmptyList[P]) extends AnyVal
+case class Ballot(p: NonEmptyList[BinaryProposal]) extends AnyVal
 
 object Ballot {
 
-  implicit def circeEncoder[P](implicit proposals: Encoder[P]): Encoder[Ballot[P]] =
-    Encoder.encodeList[P].contramap[Ballot[P]](_.p.toList)
+  implicit def circeEncoder: Encoder[Ballot] =
+    Encoder.encodeList[BinaryProposal].contramap[Ballot](_.p.toList)
 
-  implicit def circeDecoder[P](implicit proposals: Decoder[P]): Decoder[Ballot[P]] =
-    Decoder.decodeNonEmptyList[P].map(Ballot.apply)
+  implicit def circeDecoder: Decoder[Ballot] =
+    Decoder.decodeNonEmptyList[BinaryProposal].map(Ballot.apply)
+
 }

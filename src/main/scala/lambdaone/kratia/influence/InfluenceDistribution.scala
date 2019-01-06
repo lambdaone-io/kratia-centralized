@@ -1,28 +1,48 @@
 package lambdaone.kratia.influence
 
 import lambdaone.kratia.registry.{Community, Member, Registry}
-import cats.{Functor, Monad}
-import lambdaone.kratia.influence.Meritocracy.MeritEndpoint
+import cats.implicits._
+import cats.Functor
 
-trait InfluenceDistribution[F[_], Address, Data, Method] {
+sealed trait InfluenceDistribution {
 
-  def dist(community: Community[Address, Data], member: Member[Address, Data], method: Method, registry: Registry[F, Address, Data]): F[Double]
+  type Data
+
+  def distribution(member: Member, data: Option[Data]): Double
+
 }
 
 object InfluenceDistribution {
 
-  def distribute[F[_], A, D, M](community: Community[A, D], member: Member[A, D], method: M, registry: Registry[F, A, D])(implicit inf: InfluenceDistribution[F, A, D, M]): F[Double] =
-    inf.dist(community, member, method, registry)
+  def apply[F[_]: Functor](community: Community, member: Member, method: InfluenceDistribution)(implicit registry: Registry[F, method.Data]): F[Double] =
+    registry.load(community, member).map(data => method.distribution(member, data))
 
-  def lift[F[_], A, D, M](f: (Community[A, D], Member[A, D], M, Registry[F, A, D]) => F[Double]): InfluenceDistribution[F, A, D, M] =
-    (community: Community[A, D], member: Member[A, D], method: M, registry: Registry[F, A, D]) => f(community, member, method, registry)
+  case class Autocracy(king: Member, base: Double) extends InfluenceDistribution {
 
-  implicit def democratic[F[_]: Functor, A, D]: InfluenceDistribution[F, A, D, Democracy] =
-    Democracy.democraticDistribution
+    type Data = Unit
 
-  implicit def autocratic[F[_]: Functor, A, D]: InfluenceDistribution[F, A, D, Autocracy[A, D]] =
-    Autocracy.autocraticDistribution
+    def distribution(member: Member, isPart: Option[Unit]): Double =
+      if (isPart.isDefined && member == king) base else 0.0
 
-  implicit def meritocratic[F[_]: Monad, A]: InfluenceDistribution[F, A, MeritEndpoint, Meritocracy[F]] =
-    Meritocracy.meritocraticDistribution
+  }
+
+  case class Democracy(base: Double) extends InfluenceDistribution {
+
+    type Data = Unit
+
+    def distribution(member: Member, isPart: Option[Unit]): Double =
+      if (isPart.isDefined) base else 0.0
+
+  }
+
+  case class Merit(value: Double)
+
+  case object Meritocracy extends InfluenceDistribution {
+
+    type Data = Merit
+
+    def distribution(member: Member, isPart: Option[Merit]): Double =
+      isPart.fold(0.0)(_.value)
+
+  }
 }

@@ -1,4 +1,9 @@
 package lambdaone.kratia.collector
 
-case class ProofOfVote[Address](proof: Address, member: Address)
+import java.util.UUID
+
+import lambdaone.kratia.registry.Member
+
+case class ProofOfVote(proof: UUID, member: Member)
+
 

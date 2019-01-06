@@ -1,30 +1,36 @@
 package lambdaone.kratia.collector
 
-import cats.kernel.Monoid
 import cats.implicits._
-import io.circe.{Decoder, Encoder, Json}
+import cats.kernel.Monoid
+import io.circe.{Decoder, Encoder}
+import lambdaone.kratia.collector.Proposal.BinaryProposal
 
-case class InfluenceAllocation[P](value: Map[P, Influence]) extends AnyVal
+case class InfluenceAllocation(value: Map[BinaryProposal, Influence])
 
 object InfluenceAllocation {
 
-  implicit def monoid[P]: Monoid[InfluenceAllocation[P]] =
-    new Monoid[InfluenceAllocation[P]] {
-      override def empty: InfluenceAllocation[P] =
-        InfluenceAllocation(Map.empty)
-      override def combine(x: InfluenceAllocation[P], y: InfluenceAllocation[P]): InfluenceAllocation[P] =
+  implicit def monoid: Monoid[InfluenceAllocation] = {
+    new Monoid[InfluenceAllocation] {
+      override def empty: InfluenceAllocation = InfluenceAllocation(Map.empty)
+      override def combine(x: InfluenceAllocation, y: InfluenceAllocation): InfluenceAllocation =
         InfluenceAllocation(x.value |+| y.value)
     }
+  }
 
-  implicit def circeEncoder[P](implicit ep: Encoder[P]): Encoder[InfluenceAllocation[P]] =
-    Encoder.instance[InfluenceAllocation[P]] { allocation =>
-      Json.fromValues(Encoder.encodeList[(P, Influence)].encodeArray(allocation.value.toList))
-    }
-  
-  implicit def circeDecoder[P](implicit dp: Decoder[P]): Decoder[InfluenceAllocation[P]] =
-    Decoder.instance[InfluenceAllocation[P]] { hcursor =>
-      Decoder.decodeList[(P, Influence)](Decoder.decodeTuple2[P, Influence])(hcursor).map[InfluenceAllocation[P]] {
-        a => InfluenceAllocation(a.toMap)
+  implicit def circeEncoder: Encoder[InfluenceAllocation] =
+    Encoder.encodeMap[String, Double].contramap[InfluenceAllocation] { alloc =>
+      alloc.value.map { case (proposal, inf) =>
+        if (proposal.value) ("yes", inf)
+        else ("no", inf)
       }
     }
+
+  implicit def circeDecoder: Decoder[InfluenceAllocation] =
+    Decoder.decodeMap[String, Double].map { m =>
+      InfluenceAllocation(m.map {
+        case ("yes", inf) => (BinaryProposal(true), inf)
+        case (_, inf) => (BinaryProposal(false), inf)
+      })
+    }
+
 }

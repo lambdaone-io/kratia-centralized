@@ -4,8 +4,8 @@ import lambdaone.kratia.registry.{Community, Member}
 
 object RegistryProtocol {
 
-  case class RegisterRequest[A, D](community: Community[A, D], data: D)
+  case class RegisterRequest(community: Community, data: MemberData)
 
-  case class RegisterResponse[A, D](member: Member[A, D])
+  case class RegisterResponse(member: Member)
 
 }

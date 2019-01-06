@@ -1,15 +1,17 @@
 package lambdaone.kratia.protocol
 
+import java.util.UUID
+
 import lambdaone.kratia.collector._
 
 object CollectorProtocol {
 
-  case class CreateBallotBoxRequest[P, D](validBallot: Ballot[P], data: D, closesOn: Timestamp)
+  case class CreateBallotBoxRequest(validBallot: Ballot, data: DecisionData, closesOn: Timestamp)
 
-  case class CreateBallotBoxResponse[A, P, D](data: BallotMetadata[A, P, D])
+  case class CreateBallotBoxResponse(data: BallotMetadata)
 
-  case class SetVoteRequest[A, P](ballotBox: BallotBox[A, P], vote: InfluenceAllocation[P])
+  case class SetVoteRequest(ballotBox: BallotBox, vote: InfluenceAllocation)
 
-  case class SetVoteResponse[A](proof: A)
+  case class SetVoteResponse(proof: UUID)
 
 }

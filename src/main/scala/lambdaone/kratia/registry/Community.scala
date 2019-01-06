@@ -1,23 +1,17 @@
 package lambdaone.kratia.registry
 
+import java.util.UUID
+
 import io.circe.{Decoder, Encoder}
 
-/**
-  *
-  * @tparam A address type
-  * @tparam D data phantom type
-  */
-case class Community[A, D](address: A) extends AnyVal {
-
-  def map[D0](f: D => D0): Community[A, D0] =
-    Community(address)
-}
+case class Community(address: UUID) extends AnyVal
 
 object Community {
 
-  implicit def circeEncoder[A, D](implicit address: Encoder[A]): Encoder[Community[A, D]] =
-    address.contramap(_.address)
+  implicit def circeEncoder: Encoder[Community] =
+    Encoder.encodeUUID.contramap(_.address)
 
-  implicit def circeDecoder[A, D](implicit address: Decoder[A]): Decoder[Community[A, D]] =
-    address.map(Community.apply[A, D])
+  implicit def circeDecoder: Decoder[Community] =
+    Decoder.decodeUUID.map(Community.apply)
+
 }

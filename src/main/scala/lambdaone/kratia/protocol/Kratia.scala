@@ -32,11 +32,11 @@ import scala.concurrent.duration._
   */
 case class Kratia(
   uniqueGen: UniqueGen[IO, UUID],
-  registry: Registry[IO, UUID, MemberData],
-  collector: Collector[IO, UUID, BinaryProposal, String]
+  registry: Registry[IO, MemberData],
+  collector: Collector[IO]
 ) {
 
-  val rootCommunity: Community[UUID, MemberData] = Community(UUID.fromString("19ce7b9b-a4da-4f9c-9838-c04fcb0ce9db"))
+  val rootCommunity: Community = Community(UUID.fromString("19ce7b9b-a4da-4f9c-9838-c04fcb0ce9db"))
 
   val corsConfig: CORSConfig =
     CORSConfig(
@@ -50,13 +50,13 @@ case class Kratia(
     Router("/api/v1" -> CORS(v1registry <+> v1collector, corsConfig)).orNotFound
   }
 
-  def auth(request: Request[IO])(program: (Member[UUID, MemberData], MemberData) => IO[Response[IO]]): IO[Response[IO]] = {
+  def auth(request: Request[IO])(program: (Member, MemberData) => IO[Response[IO]]): IO[Response[IO]] = {
     val Bearer = """^Bearer\s(.*)$""".r
     request.headers.get(headers.Authorization).fold(Forbidden()) { header =>
       header.value match {
         case Bearer(token) =>
           Json.fromString(token).as[UUID].fold[IO[Response[IO]]](_ => Forbidden(), { address =>
-            val member = Member[UUID, MemberData](address)
+            val member = Member(address)
             registry.load(rootCommunity, member).flatMap {
               case None => Forbidden()
               case Some(data) => program(member, data)
@@ -72,17 +72,16 @@ case class Kratia(
 
     case request @ POST -> Root / "registry" =>
 
-      implicit val decoder: EntityDecoder[IO, RegisterRequest[UUID, Nickname]] =
-        jsonOf[IO, RegisterRequest[UUID, Nickname]]
-      implicit val encoder: EntityEncoder[IO, RegisterResponse[UUID, Nickname]] =
-        jsonEncoderOf[IO, RegisterResponse[UUID, Nickname]]
-      val nicknameRegistry = registry.imap(_.nickname)(MemberData.apply)
+      implicit val decoder: EntityDecoder[IO, RegisterRequest] =
+        jsonOf[IO, RegisterRequest]
+      implicit val encoder: EntityEncoder[IO, RegisterResponse] =
+        jsonEncoderOf[IO, RegisterResponse]
 
       for {
-        req <- request.as[RegisterRequest[UUID, Nickname]]
+        req <- request.as[RegisterRequest]
         address <- uniqueGen.gen
-        member = Member[UUID, Nickname](address)
-        _ <- nicknameRegistry.register(req.community, member, req.data)
+        member = Member(address)
+        _ <- registry.register(req.community, member, req.data)
         ok <- Ok(RegisterResponse(member))
       } yield ok
 
@@ -96,14 +95,14 @@ case class Kratia(
 
     case request @ POST -> Root / "collector" =>
 
-      implicit val decoder: EntityDecoder[IO, CreateBallotBoxRequest[BinaryProposal, String]] =
-        jsonOf[IO, CreateBallotBoxRequest[BinaryProposal, String]]
-      implicit val encoder: EntityEncoder[IO, CreateBallotBoxResponse[UUID, BinaryProposal, String]] =
-        jsonEncoderOf[IO, CreateBallotBoxResponse[UUID, BinaryProposal, String]]
+      implicit val decoder: EntityDecoder[IO, CreateBallotBoxRequest] =
+        jsonOf[IO, CreateBallotBoxRequest]
+      implicit val encoder: EntityEncoder[IO, CreateBallotBoxResponse] =
+        jsonEncoderOf[IO, CreateBallotBoxResponse]
 
       auth(request) { (_, _) =>
         for {
-          req <- request.as[CreateBallotBoxRequest[BinaryProposal, String]]
+          req <- request.as[CreateBallotBoxRequest]
           box <- collector.create(req.validBallot, req.closesOn, req.data)
           ok <- Ok(CreateBallotBoxResponse(BallotMetadata(
             box, req.validBallot, req.closesOn, req.data
@@ -115,22 +114,22 @@ case class Kratia(
 
       auth(request) { case (_, _) =>
         for {
-          list <- collector.list
+          list <- collector.listOpen
           ok <- Ok(Json.obj("data" -> list.asJson))
         } yield ok
       }
 
     case request @ POST -> Root / "collector" / "vote" =>
 
-      implicit val decoder: EntityDecoder[IO, SetVoteRequest[UUID, BinaryProposal]] =
-        jsonOf[IO, SetVoteRequest[UUID, BinaryProposal]]
-      implicit val encoder: EntityEncoder[IO, SetVoteResponse[UUID]] =
-        jsonEncoderOf[IO, SetVoteResponse[UUID]]
+      implicit val decoder: EntityDecoder[IO, SetVoteRequest] =
+        jsonOf[IO, SetVoteRequest]
+      implicit val encoder: EntityEncoder[IO, SetVoteResponse] =
+        jsonEncoderOf[IO, SetVoteResponse]
 
       auth(request) { case (member, _) =>
         for {
-          req <- request.as[SetVoteRequest[UUID, BinaryProposal]]
-          vote = Vote[UUID, BinaryProposal](member.address, req.vote)
+          req <- request.as[SetVoteRequest]
+          vote = Vote(member, req.vote)
           proof <- collector.vote(req.ballotBox, vote)
           ok <- Ok(SetVoteResponse(proof.proof))
         } yield ok
@@ -146,18 +145,18 @@ object Kratia {
       collector <- buildInMemCollector
     } yield Kratia(UniqueGen.UniqueGenUUID, registry, collector)
 
-  def buildInMemRegistry: IO[Registry[IO, UUID, MemberData]] =
+  def buildInMemRegistry: IO[Registry[IO, MemberData]] =
     for {
-      store <- Ref.of[IO, Map[(UUID, UUID), MemberData]](Map.empty)
+      store <- Ref.of[IO, Map[(Community, Member), MemberData]](Map.empty)
       crud = CRUDPickInMem(store)
       reg = RegistryCRUD(crud)
     } yield reg
 
-  def buildInMemCollector: IO[Collector[IO, UUID, BinaryProposal, String]] =
+  def buildInMemCollector: IO[Collector[IO]] =
     for {
-      store <- Ref.of[IO, Map[UUID, BoxData[UUID, BinaryProposal, String]]](Map.empty)
+      store <- Ref.of[IO, Map[UUID, BoxData]](Map.empty)
       clock = Clock.create[IO]
       crud = CRUDPickInMem(store)
-      collector = CollectorCRUD[IO, UUID, BinaryProposal, String](clock, crud, UniqueGen.UniqueGenUUID)
+      collector = CollectorCRUD[IO](clock, crud, UniqueGen.UniqueGenUUID)
     } yield collector
 }
