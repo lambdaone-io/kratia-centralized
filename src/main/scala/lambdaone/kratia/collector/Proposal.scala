@@ -22,10 +22,10 @@ object Proposal {
     val ballot: Ballot = Ballot(BinaryProposal.AllChoices)
 
     implicit val circeEncoder: Encoder[BinaryProposal] =
-      Encoder.encodeBoolean.contramap(_.value)
+      Encoder.encodeString.contramap(p => if (p.value) "yes" else "no")
 
     implicit val circeDecoder: Decoder[BinaryProposal] =
-      Decoder.decodeBoolean.map(BinaryProposal.apply)
+      Decoder.decodeString.map(s => if(s == "yes") Yes else No)
 
   }
 

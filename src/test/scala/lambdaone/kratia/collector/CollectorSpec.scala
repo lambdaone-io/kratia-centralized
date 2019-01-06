@@ -5,14 +5,14 @@ import java.util.UUID
 import cats.effect.IO
 import lambdaone.kratia.collector.Proposal.BinaryProposal
 import lambdaone.kratia.collector.Proposal.BinaryProposal.{Yes, No}
-import lambdaone.kratia.protocol.Kratia
+import lambdaone.kratia.protocol.KratiaService
 import lambdaone.kratia.registry.Member
 import org.scalatest.FlatSpec
 
 class CollectorSpec extends FlatSpec {
 
   val collector: Collector[IO] =
-    Kratia.buildInMemCollector.unsafeRunSync()
+    KratiaService.buildInMemCollector.unsafeRunSync()
 
   "Collector" should "simple collect votes" in {
     val program: IO[InfluenceAllocation] = for {
