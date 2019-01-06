@@ -6,7 +6,7 @@ import cats.Monad
 import cats.implicits._
 import lambdaone.toolbox.CRUDPick
 
-class ResolvedCRUD[F[_]: Monad](store: CRUDPick[F, UUID, Resolution]) extends Resolved[F] {
+case class ResolvedCRUD[F[_]: Monad](store: CRUDPick[F, UUID, Resolution]) extends Resolved[F] {
 
   override def create(resolution: Resolution): F[Unit] = {
     for {

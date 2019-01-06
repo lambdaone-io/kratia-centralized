@@ -2,10 +2,10 @@ package lambdaone.kratia.protocol
 
 import java.util.UUID
 
-import cats.effect.IO
+import cats.effect.{ContextShift, IO, Timer}
 import lambdaone.kratia.collector._
 import lambdaone.kratia.registry.{Community, Member, Registry}
-import lambdaone.toolbox.UniqueGen
+import lambdaone.toolbox.{TemporalPriorityQueue, UniqueGen}
 import lambdaone.toolbox.mem.CRUDPickInMem
 import org.http4s.implicits._
 import cats.implicits._
@@ -22,6 +22,9 @@ import org.http4s.headers
 import org.http4s.server.Router
 import org.http4s.server.middleware._
 import cats.effect.implicits._
+import lambdaone.kratia.resolution.Resolved
+import lambdaone.toolbox.QueueTaskProcessor.WorkerShutDown
+
 import scala.concurrent.duration._
 
 /**
@@ -30,10 +33,14 @@ import scala.concurrent.duration._
 case class KratiaService(
   uniqueGen: UniqueGen[IO, UUID],
   registry: Registry[IO, MemberData],
-  collector: Collector[IO]
-) {
+  collector: Collector[IO],
+  resolved: Resolved[IO],
+  decisionQueue: TemporalPriorityQueue[UUID]
+)(implicit timer: Timer[IO], cs: ContextShift[IO]) {
 
   val rootCommunity: Community = Community(UUID.fromString("19ce7b9b-a4da-4f9c-9838-c04fcb0ce9db"))
+
+  def runResolver: IO[WorkerShutDown] = DecisionResolver(decisionQueue, collector, resolved).run
 
   val corsConfig: CORSConfig =
     CORSConfig(
@@ -100,7 +107,10 @@ case class KratiaService(
       auth(request) { (_, _) =>
         for {
           req <- request.as[CreateBallotBoxRequest]
-          box <- collector.create(req.validBallot, req.closesOn, req.data)
+          now <- timer.clock.realTime(SECONDS)
+          box <- collector.create(req.validBallot, now + req.closesOn, req.data)
+          duration <- decisionQueue.enqueue(box.address, req.closesOn.seconds)
+          _ = println("Will resolve decision in " + duration)
           ok <- Ok(CreateBallotBoxResponse(BallotMetadata(
             box, req.validBallot, req.closesOn, req.data
           )))
@@ -131,5 +141,15 @@ case class KratiaService(
           ok <- Ok(SetVoteResponse(proof.proof))
         } yield ok
       }
+
+    case request@GET -> Root / "collector" / "finished" =>
+
+      auth(request) { case (_, _) =>
+        for {
+          list <- resolved.listClosed
+          ok <- Ok(Json.obj("data" -> list.asJson))
+        } yield ok
+      }
+
   }
 }

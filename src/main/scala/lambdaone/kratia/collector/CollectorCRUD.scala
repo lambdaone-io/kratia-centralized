@@ -82,8 +82,17 @@ case class CollectorCRUD[F[_]](
     } yield contained
   }
 
-  override def inspect(ballotBox: BallotBox): F[InfluenceAllocation] =
-    fetchData(ballotBox.address).map(_.votes.values.toList.map(_._2).combineAll)
+  override def inspect(ballotBox: BallotBox): F[DecisionResults] =
+    fetchData(ballotBox.address).map { data =>
+      val alloc = data.votes.values.toList.map(_._2).combineAll
+      DecisionResults(
+        address = ballotBox.address,
+        closedOn = data.closedOn,
+        data = data.data,
+        maxInfluence = data.votes.size,
+        allocation = alloc
+      )
+    }
 
   override def listOpen: F[List[BallotMetadata]] =
     for {
