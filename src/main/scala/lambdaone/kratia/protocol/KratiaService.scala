@@ -21,9 +21,10 @@ import org.http4s.headers
 import org.http4s.server.Router
 import org.http4s.server.middleware._
 import cats.effect.implicits._
-import lambdaone.github.GHEvent
 import lambdaone.github.events.{InstallationEvent, PullRequestEvent}
+import lambdaone.kratia.collector.Proposal.BinaryProposal
 import lambdaone.kratia.resolution.Resolved
+import lambdaone.kratia.utils.DecodeOp.ifDecodes
 import lambdaone.toolbox.QueueTaskProcessor.WorkerShutDown
 
 import scala.concurrent.duration._
@@ -38,6 +39,25 @@ case class KratiaService(
   resolved: Resolved[IO],
   decisionQueue: TemporalPriorityQueue[UUID]
 )(implicit timer: Timer[IO], cs: ContextShift[IO]) {
+
+  // LOGIC
+
+  object v1collectorBL {
+
+    def createBallot(req: CreateBallotBoxRequest): IO[CreateBallotBoxResponse] =
+      for {
+        now <- timer.clock.realTime(SECONDS)
+        box <- collector.create(req.validBallot, now + req.closesOn, req.data)
+        duration <- decisionQueue.enqueue(box.address, req.closesOn.seconds)
+        _ = println("Will resolve decision in " + duration)
+        res = CreateBallotBoxResponse(BallotMetadata(
+          box, req.validBallot, req.closesOn, req.data
+        ))
+      } yield res
+
+  }
+
+  // HTTP
 
   val rootCommunity: Community = Community(UUID.fromString("19ce7b9b-a4da-4f9c-9838-c04fcb0ce9db"))
 
@@ -111,13 +131,8 @@ case class KratiaService(
       auth(request) { (_, _) =>
         for {
           req <- request.as[CreateBallotBoxRequest]
-          now <- timer.clock.realTime(SECONDS)
-          box <- collector.create(req.validBallot, now + req.closesOn, req.data)
-          duration <- decisionQueue.enqueue(box.address, req.closesOn.seconds)
-          _ = println("Will resolve decision in " + duration)
-          ok <- Ok(CreateBallotBoxResponse(BallotMetadata(
-            box, req.validBallot, req.closesOn, req.data
-          )))
+          res <- v1collectorBL.createBallot(req)
+          ok <- Ok(res)
         } yield ok
       }
 
@@ -168,11 +183,23 @@ case class KratiaService(
         _ <- IO { println(request.headers) }
         json <- request.as[Json]
         _ <- {
-          GHEvent[InstallationEvent] { event =>
+          ifDecodes[InstallationEvent] { event =>
             IO { println(event.installation.account.login + " just installed Kratia!") }
           } orElse
-          GHEvent[PullRequestEvent] { event =>
-            IO { println(event.pull_request.html_url) }
+          ifDecodes[PullRequestEvent] { event =>
+            event.action match {
+              case "opened" =>
+                for {
+                  res <- v1collectorBL.createBallot(CreateBallotBoxRequest(
+                    validBallot = BinaryProposal.ballot,
+                    data = DecisionData(event.asJson.noSpaces),
+                    closesOn = 60
+                  ))
+                  _ <- IO { println(Console.MAGENTA + res + Console.RESET) }
+                } yield ()
+              case other =>
+                IO { println(Console.MAGENTA + "PR event: " + other + Console.RESET) }
+            }
           }
         }.run(json)
         ok <- Ok()
