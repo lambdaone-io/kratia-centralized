@@ -15,4 +15,10 @@ case class CRUDPickInMem[I, A](withRef: Ref[IO, Map[I, A]]) extends CRUDPick[IO,
 
 }
 
+object CRUDPickInMem {
 
+  def apply[I, A]: IO[CRUDPickInMem[I, A]] =
+    for {
+      store <- Ref.of[IO, Map[I, A]](Map.empty)
+    } yield new CRUDPickInMem(store)
+}

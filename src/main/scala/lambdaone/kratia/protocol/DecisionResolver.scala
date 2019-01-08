@@ -3,21 +3,31 @@ package lambdaone.kratia.protocol
 import java.util.UUID
 
 import cats.effect.{ContextShift, IO, Timer}
-import lambdaone.kratia.collector.{BallotBox, Collector}
+import lambdaone.github.GitHubApi
+import lambdaone.kratia.collector.{BallotBox, Collector, DecisionData}
 import lambdaone.kratia.resolution.{DecisionResolution, Resolution, Resolved}
 import lambdaone.kratia.resolution.DecisionResolution.Majority
 import lambdaone.toolbox.TemporalPriorityQueue
 import lambdaone.toolbox.QueueTaskProcessor
 import lambdaone.toolbox.QueueTaskProcessor.WorkerShutDown
+import lambdaone.kratia.utils.DecodeOp.ifDecodes
+import io.circe.generic.auto._
+import lambdaone.github.events.PullRequestEvent
+import lambdaone.kratia.collector.Proposal.BinaryProposal
 
 import scala.concurrent.duration._
 
-case class DecisionResolver(queue: TemporalPriorityQueue[UUID], collector: Collector[IO], resolved: Resolved[IO])(implicit timer: Timer[IO], cs: ContextShift[IO]) {
+case class DecisionResolver(
+    queue: TemporalPriorityQueue[UUID],
+    collector: Collector[IO],
+    resolved: Resolved[IO],
+    gitHubApi: GitHubApi[IO]
+  )(implicit timer: Timer[IO], cs: ContextShift[IO]) {
 
   private val worker =
     new QueueTaskProcessor[UUID](
       parallelism = 1,
-      restInterval = 1.second,
+      restInterval = 2.second,
       maxRetries = 3,
       queue = queue
     )(resolve)
@@ -25,13 +35,24 @@ case class DecisionResolver(queue: TemporalPriorityQueue[UUID], collector: Colle
   def resolve(address: UUID): IO[Either[String, String]] =
     for {
       result <- collector.inspect(BallotBox(address))
-      res = DecisionResolution(result.allocation, -1.0, Majority)
+      resolution0 = DecisionResolution(result.allocation, -1.0, Majority)
+      newData <- {
+        ifDecodes[PullRequestEvent] { event =>
+          if (resolution0.headOption.contains(BinaryProposal.Yes))
+            gitHubApi.closePullRequest(event.pull_request, event.installation.id).map(_ => event.pull_request.html_url)
+          else
+            IO.pure("")
+        } orElse
+        ifDecodes[SimpleDecision] { simple =>
+          IO.pure(simple.message)
+        }
+      }.run(io.circe.parser.parse(result.data.value).right.get)
       resolution = Resolution(
         address = result.address,
         closedOn = result.closedOn,
-        data = result.data,
+        data = DecisionData(newData),
         maxInfluence = result.maxInfluence,
-        resolution = res
+        resolution = resolution0
       )
       _ <- resolved.create(resolution)
     } yield Right(result.data + " DONE")

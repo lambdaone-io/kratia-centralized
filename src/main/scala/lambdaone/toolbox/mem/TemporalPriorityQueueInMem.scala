@@ -20,7 +20,8 @@ case class TemporalPriorityQueueInMem[A](
   override implicit def timer: Timer[IO] = t
 
   def log(message: String): IO[Unit] =
-    IO(println(s"${Console.BLUE}Queue[-] $message${Console.RESET}"))
+    IO(())
+    //IO(println(s"${Console.BLUE}Queue[-] $message${Console.RESET}"))
 
   protected def execEnqueue(data: A, readyOn: Long): IO[Unit] =
     log(s"Enqueue [readyOn = $readyOn](data = $data)") *>

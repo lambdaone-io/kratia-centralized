@@ -1,4 +1,8 @@
 
+### Secret
+src/main/resources/secret/
+
+### Static
 src/main/resources/static/
 
 ### Scala template
