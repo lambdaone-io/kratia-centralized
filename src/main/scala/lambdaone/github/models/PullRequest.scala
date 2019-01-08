@@ -8,5 +8,13 @@ case class PullRequest (
   user: GithubUser,
   body: String,
   created_at: String,
-  head: Commit
+  head: Commit,
+  _links: PullRequest.Links
 )
+
+object PullRequest {
+
+  case class Links(self: LinksSelf)
+
+  case class LinksSelf(href: String)
+}

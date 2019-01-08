@@ -8,22 +8,22 @@ import org.http4s.client.blaze.BlazeClientBuilder
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
-case class GithubConfiguration(
+case class GitHubConfig(
   privateKey: String,
   appId: String,
   webhookSecret: String,
   client: Resource[IO, Client[IO]]
 )
 
-object GithubConfiguration {
+object GitHubConfig {
 
-  def load(implicit cs: ContextShift[IO]): Kleisli[IO, Config, GithubConfiguration] =
+  def load(implicit cs: ContextShift[IO]): Kleisli[IO, Config, GitHubConfig] =
     for {
       appId <- loadString("app-id")
       secret <- loadString("webhook-secret")
       privateKey <- loadFromSecret("github.pem")
       client = BlazeClientBuilder[IO](global).resource
-    } yield GithubConfiguration(privateKey, appId, secret, client)
+    } yield GitHubConfig(privateKey, appId, secret, client)
 
   private def loadString(path: String): Kleisli[IO, Config, String] =
     for {

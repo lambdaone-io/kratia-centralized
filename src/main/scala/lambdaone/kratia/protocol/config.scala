@@ -7,7 +7,8 @@ import cats.effect.concurrent.Ref
 import com.typesafe.config.{Config, ConfigFactory}
 import doobie.util.{Get, Put}
 import doobie.util.transactor.Transactor
-import lambdaone.github.GithubConfiguration
+import lambdaone.github.models.{Installation, InstallationAccessToken}
+import lambdaone.github.{GitHubApi, GitHubApiIO, GitHubConfig}
 import lambdaone.kratia.collector.{Collector, CollectorCRUD}
 import lambdaone.kratia.collector.CollectorCRUD.BoxData
 import lambdaone.kratia.registry.{Community, Member, Registry, RegistryCRUD}
@@ -27,33 +28,35 @@ object KratiaInMem {
   def inMem(implicit timer: Timer[IO], cs: ContextShift[IO]): IO[KratiaService] =
     for {
       config <- buildConfigObject
-      githubConfig <- GithubConfiguration.load.run(config)
       registry <- buildInMemRegistry
       collector <- buildInMemCollector
       resolved <- buildInMemResolved
       queue <- buildResolutionQueue(timer)
-    } yield KratiaService(UniqueGen.UniqueGenUUID, registry, collector, resolved, queue, githubConfig)
+      gitHubApi <- buildGitHubApi(config)
+    } yield KratiaService(UniqueGen.UniqueGenUUID, registry, collector, resolved, queue, gitHubApi)
+
+  def buildGitHubApi(config: Config)(implicit timer: Timer[IO], cs: ContextShift[IO]): IO[GitHubApi[IO]] =
+    for {
+      githubConfig <- GitHubConfig.load.run(config)
+      crud <- CRUDPickInMem[Int, (Installation, InstallationAccessToken)]
+      gitHubApi = GitHubApiIO(githubConfig, crud)
+    } yield gitHubApi
 
   def buildInMemRegistry: IO[Registry[IO, MemberData]] =
     for {
-      store <- Ref.of[IO, Map[(Community, Member), MemberData]](Map.empty)
-      crud = CRUDPickInMem(store)
+      crud <- CRUDPickInMem[(Community, Member), MemberData]
       reg = RegistryCRUD(crud)
     } yield reg
 
-  def buildInMemCollector: IO[Collector[IO]] =
+  def buildInMemCollector(implicit timer: Timer[IO]): IO[Collector[IO]] =
     for {
-      store <- Ref.of[IO, Map[UUID, BoxData]](Map.empty)
-      clock = Clock.create[IO]
-      crud = CRUDPickInMem(store)
-      collector = CollectorCRUD[IO](clock, crud, UniqueGen.UniqueGenUUID)
+      crud <- CRUDPickInMem[UUID, BoxData]
+      collector = CollectorCRUD[IO](timer.clock, crud, UniqueGen.UniqueGenUUID)
     } yield collector
 
   def buildInMemResolved: IO[Resolved[IO]] =
     for {
-      store <- Ref.of[IO, Map[UUID, Resolution]](Map.empty)
-      clock = Clock.create[IO]
-      crud = CRUDPickInMem(store)
+      crud <- CRUDPickInMem[UUID, Resolution]
       resolved = ResolvedCRUD[IO](crud)
     } yield resolved
 

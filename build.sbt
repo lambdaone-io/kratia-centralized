@@ -20,6 +20,7 @@ libraryDependencies ++= List(
   "com.typesafe" % "config" % "1.3.2",
   "com.pauldijou" %% "jwt-core" % "1.0.0",
   "com.pauldijou" %% "jwt-circe" % "1.0.0",
+  "com.github.nscala-time" %% "nscala-time" % "2.20.0",
   "io.circe" %% "circe-generic" % circe,
   "io.circe" %% "circe-parser" % circe,
   "org.http4s" %% "http4s-blaze-server" % http4s,

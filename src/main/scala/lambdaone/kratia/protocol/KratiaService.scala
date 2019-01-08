@@ -21,7 +21,7 @@ import org.http4s.headers
 import org.http4s.server.Router
 import org.http4s.server.middleware._
 import cats.effect.implicits._
-import lambdaone.github.{GitHubApi, GithubConfiguration}
+import lambdaone.github.GitHubApi
 import lambdaone.github.events.{InstallationEvent, PullRequestEvent}
 import lambdaone.kratia.collector.Proposal.BinaryProposal
 import lambdaone.kratia.resolution.Resolved
@@ -39,7 +39,7 @@ case class KratiaService(
   collector: Collector[IO],
   resolved: Resolved[IO],
   decisionQueue: TemporalPriorityQueue[UUID],
-  githubConfiguration: GithubConfiguration
+  gitHubApi: GitHubApi[IO]
 )(implicit timer: Timer[IO], cs: ContextShift[IO]) {
 
   // LOGIC
@@ -63,7 +63,7 @@ case class KratiaService(
 
   val rootCommunity: Community = Community(UUID.fromString("19ce7b9b-a4da-4f9c-9838-c04fcb0ce9db"))
 
-  def runResolver: IO[WorkerShutDown] = DecisionResolver(decisionQueue, collector, resolved).run
+  def runResolver: IO[WorkerShutDown] = DecisionResolver(decisionQueue, collector, resolved, gitHubApi).run
 
   val corsConfig: CORSConfig =
     CORSConfig(
@@ -133,7 +133,8 @@ case class KratiaService(
       auth(request) { (_, _) =>
         for {
           req <- request.as[CreateBallotBoxRequest]
-          res <- v1collectorBL.createBallot(req)
+          req0 = req.copy(data = DecisionData(SimpleDecision(req.data.value).asJson.noSpaces))
+          res <- v1collectorBL.createBallot(req0)
           ok <- Ok(res)
         } yield ok
       }
@@ -178,7 +179,8 @@ case class KratiaService(
 
     def installation(event: InstallationEvent): IO[Unit] =
       for {
-        installation <- GitHubApi.getAccessToken(event.installation).run(githubConfiguration)
+        accessToken <- gitHubApi.getAccessToken(event.installation)
+        installation <- gitHubApi.storeAccessToken(event.installation, accessToken)
         _ <- IO { println(installation) }
       } yield ()
 
@@ -195,7 +197,7 @@ case class KratiaService(
         res <- v1collectorBL.createBallot(CreateBallotBoxRequest(
           validBallot = BinaryProposal.ballot,
           data = DecisionData(event.asJson.noSpaces),
-          closesOn = 60
+          closesOn = 30
         ))
         _ <- IO { println(Console.MAGENTA + res + Console.RESET) }
       } yield ()

@@ -8,5 +8,6 @@ import lambdaone.github.models.PullRequest
 case class PullRequestEvent(
   action: String,
   number: Int,
-  pull_request: PullRequest
+  pull_request: PullRequest,
+  installation: InstallationLight
 )
