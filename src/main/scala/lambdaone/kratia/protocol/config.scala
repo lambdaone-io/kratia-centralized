@@ -4,8 +4,10 @@ import java.util.UUID
 
 import cats.effect.{Clock, ContextShift, IO, Timer}
 import cats.effect.concurrent.Ref
+import com.typesafe.config.{Config, ConfigFactory}
 import doobie.util.{Get, Put}
 import doobie.util.transactor.Transactor
+import lambdaone.github.GithubConfiguration
 import lambdaone.kratia.collector.{Collector, CollectorCRUD}
 import lambdaone.kratia.collector.CollectorCRUD.BoxData
 import lambdaone.kratia.registry.{Community, Member, Registry, RegistryCRUD}
@@ -19,13 +21,18 @@ import scala.concurrent.duration._
 
 object KratiaInMem {
 
+  def buildConfigObject: IO[Config] =
+    IO { ConfigFactory.load() }
+
   def inMem(implicit timer: Timer[IO], cs: ContextShift[IO]): IO[KratiaService] =
     for {
+      config <- buildConfigObject
+      githubConfig <- GithubConfiguration.load.run(config)
       registry <- buildInMemRegistry
       collector <- buildInMemCollector
       resolved <- buildInMemResolved
       queue <- buildResolutionQueue(timer)
-    } yield KratiaService(UniqueGen.UniqueGenUUID, registry, collector, resolved, queue)
+    } yield KratiaService(UniqueGen.UniqueGenUUID, registry, collector, resolved, queue, githubConfig)
 
   def buildInMemRegistry: IO[Registry[IO, MemberData]] =
     for {

@@ -21,6 +21,7 @@ import org.http4s.headers
 import org.http4s.server.Router
 import org.http4s.server.middleware._
 import cats.effect.implicits._
+import lambdaone.github.{GitHubApi, GithubConfiguration}
 import lambdaone.github.events.{InstallationEvent, PullRequestEvent}
 import lambdaone.kratia.collector.Proposal.BinaryProposal
 import lambdaone.kratia.resolution.Resolved
@@ -37,7 +38,8 @@ case class KratiaService(
   registry: Registry[IO, MemberData],
   collector: Collector[IO],
   resolved: Resolved[IO],
-  decisionQueue: TemporalPriorityQueue[UUID]
+  decisionQueue: TemporalPriorityQueue[UUID],
+  githubConfiguration: GithubConfiguration
 )(implicit timer: Timer[IO], cs: ContextShift[IO]) {
 
   // LOGIC
@@ -73,7 +75,7 @@ case class KratiaService(
 
   def app: HttpApp[IO] = {
     Router(
-      "/" -> github,
+      "/" -> github.routes,
       "/api/v1" -> CORS(v1registry <+> v1collector, corsConfig),
     ).orNotFound
   }
@@ -172,39 +174,50 @@ case class KratiaService(
 
   }
 
-  def github: HttpRoutes[IO] = HttpRoutes.of[IO] {
+  object github {
 
-    case request@POST -> Root / "event_handler" =>
-
-      implicit val decoder: EntityDecoder[IO, InstallationEvent] =
-        jsonOf[IO, InstallationEvent]
-
+    def installation(event: InstallationEvent): IO[Unit] =
       for {
-        _ <- IO { println(request.headers) }
-        json <- request.as[Json]
-        _ <- {
-          ifDecodes[InstallationEvent] { event =>
-            IO { println(event.installation.account.login + " just installed Kratia!") }
-          } orElse
-          ifDecodes[PullRequestEvent] { event =>
-            event.action match {
-              case "opened" =>
-                for {
-                  res <- v1collectorBL.createBallot(CreateBallotBoxRequest(
-                    validBallot = BinaryProposal.ballot,
-                    data = DecisionData(event.asJson.noSpaces),
-                    closesOn = 60
-                  ))
-                  _ <- IO { println(Console.MAGENTA + res + Console.RESET) }
-                } yield ()
-              case other =>
-                IO { println(Console.MAGENTA + "PR event: " + other + Console.RESET) }
-            }
-          }
-        }.run(json)
-        ok <- Ok()
-      } yield ok
+        installation <- GitHubApi.getAccessToken(event.installation).run(githubConfiguration)
+        _ <- IO { println(installation) }
+      } yield ()
 
+    def pullRequest(event: PullRequestEvent): IO[Unit] =
+      event.action match {
+        case "opened" =>
+          pullRequestOpen(event)
+        case other =>
+          IO { println(Console.MAGENTA + "PR event: " + other + Console.RESET) }
+      }
+
+    def pullRequestOpen(event: PullRequestEvent): IO[Unit] =
+      for {
+        res <- v1collectorBL.createBallot(CreateBallotBoxRequest(
+          validBallot = BinaryProposal.ballot,
+          data = DecisionData(event.asJson.noSpaces),
+          closesOn = 60
+        ))
+        _ <- IO { println(Console.MAGENTA + res + Console.RESET) }
+      } yield ()
+
+    def routes: HttpRoutes[IO] = HttpRoutes.of[IO] {
+
+      case request@POST -> Root / "event_handler" =>
+
+        implicit val decoder: EntityDecoder[IO, InstallationEvent] =
+          jsonOf[IO, InstallationEvent]
+
+        for {
+          _ <- IO { println(request.headers) }
+          json <- request.as[Json]
+          _ <- {
+            ifDecodes[InstallationEvent](installation) orElse
+              ifDecodes[PullRequestEvent](pullRequest)
+          }.run(json)
+          ok <- Ok()
+        } yield ok
+    }
   }
 
 }
+
