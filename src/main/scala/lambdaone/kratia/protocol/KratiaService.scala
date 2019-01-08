@@ -11,9 +11,8 @@ import org.http4s.implicits._
 import cats.implicits._
 import io.circe.Json
 import io.circe.syntax._
-import lambdaone.kratia.protocol.MemberData.Nickname
 import lambdaone.kratia.protocol.RegistryProtocol.{RegisterRequest, RegisterResponse}
-import org.http4s.circe.{jsonEncoder, jsonEncoderOf, jsonOf}
+import org.http4s.circe.{jsonDecoder, jsonEncoder, jsonEncoderOf, jsonOf}
 import org.http4s._
 import org.http4s.dsl.io._
 import io.circe.generic.auto._
@@ -22,6 +21,8 @@ import org.http4s.headers
 import org.http4s.server.Router
 import org.http4s.server.middleware._
 import cats.effect.implicits._
+import lambdaone.github.GHEvent
+import lambdaone.github.events.{InstallationEvent, PullRequestEvent}
 import lambdaone.kratia.resolution.Resolved
 import lambdaone.toolbox.QueueTaskProcessor.WorkerShutDown
 
@@ -51,7 +52,10 @@ case class KratiaService(
     )
 
   def app: HttpApp[IO] = {
-    Router("/api/v1" -> CORS(v1registry <+> v1collector, corsConfig)).orNotFound
+    Router(
+      "/" -> github,
+      "/api/v1" -> CORS(v1registry <+> v1collector, corsConfig),
+    ).orNotFound
   }
 
   def auth(request: Request[IO])(program: (Member, MemberData) => IO[Response[IO]]): IO[Response[IO]] = {
@@ -152,4 +156,28 @@ case class KratiaService(
       }
 
   }
+
+  def github: HttpRoutes[IO] = HttpRoutes.of[IO] {
+
+    case request@POST -> Root / "event_handler" =>
+
+      implicit val decoder: EntityDecoder[IO, InstallationEvent] =
+        jsonOf[IO, InstallationEvent]
+
+      for {
+        _ <- IO { println(request.headers) }
+        json <- request.as[Json]
+        _ <- {
+          GHEvent[InstallationEvent] { event =>
+            IO { println(event.installation.account.login + " just installed Kratia!") }
+          } orElse
+          GHEvent[PullRequestEvent] { event =>
+            IO { println(event.pull_request.html_url) }
+          }
+        }.run(json)
+        ok <- Ok()
+      } yield ok
+
+  }
+
 }

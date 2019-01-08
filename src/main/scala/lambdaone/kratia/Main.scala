@@ -13,7 +13,6 @@ object Main extends IOApp {
     for {
       config <- buildConfigObject
       githubConfig <- GithubConfiguration.load.run(config)
-      _ = println(githubConfig)
       kratia <- KratiaInMem.inMem
       workerShutdown <- kratia.runResolver
       code <- BlazeServerBuilder[IO]
