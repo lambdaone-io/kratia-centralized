@@ -27,6 +27,8 @@ trait GitHubApi[F[_]] {
 
   def fetchAccessTokenFromStore(id: Int): F[Option[(Installation, InstallationAccessToken)]]
 
+  def removeAccessTokenFromStore(id: Int): F[Unit]
+
   def getOrRenewAccessToken(installationId: Int)(implicit F: MonadError[F, Throwable]): F[InstallationAccessToken] =
     for {
       optToken <- fetchAccessTokenFromStore(installationId)
@@ -92,6 +94,9 @@ case class GitHubApiIO(config: GitHubConfig, crudTokens: CRUDPick[IO, Int, (Inst
         }
       })
     } yield response
+
+  def removeAccessTokenFromStore(id: Int): IO[Unit] =
+    crudTokens.delete(id).void
 
   private def requestClosePullRequest(pr: PullRequest, token: InstallationAccessToken): IO[Either[MergePRFailure, MergePRSuccess]] = {
     println(Console.YELLOW + s"Will try to merge PR: ${pr._links.self.href}" + Console.RESET)

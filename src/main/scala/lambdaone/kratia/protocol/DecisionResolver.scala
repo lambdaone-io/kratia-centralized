@@ -3,6 +3,7 @@ package lambdaone.kratia.protocol
 import java.util.UUID
 
 import cats.effect.{ContextShift, IO, Timer}
+import io.circe.Json
 import lambdaone.github.GitHubApi
 import lambdaone.kratia.collector.{BallotBox, Collector, DecisionData}
 import lambdaone.kratia.resolution.{DecisionResolution, Resolution, Resolved}
@@ -12,6 +13,7 @@ import lambdaone.toolbox.QueueTaskProcessor
 import lambdaone.toolbox.QueueTaskProcessor.WorkerShutDown
 import lambdaone.kratia.utils.DecodeOp.ifDecodes
 import io.circe.generic.auto._
+import io.circe.syntax._
 import lambdaone.github.events.PullRequestEvent
 import lambdaone.kratia.collector.Proposal.BinaryProposal
 
@@ -39,14 +41,14 @@ case class DecisionResolver(
       newData <- {
         ifDecodes[PullRequestEvent] { event =>
           if (resolution0.headOption.contains(BinaryProposal.Yes))
-            gitHubApi.closePullRequest(event.pull_request, event.installation.id).map(_ => event.pull_request.html_url)
+            gitHubApi.closePullRequest(event.pull_request, event.installation.id).map(_ => event.asJson)
           else
-            IO.pure("")
+            IO.pure(Json.obj())
         } orElse
         ifDecodes[SimpleDecision] { simple =>
           IO.pure(simple.message)
         }
-      }.run(io.circe.parser.parse(result.data.value).right.get)
+      }.run(result.data.value)
       resolution = Resolution(
         address = result.address,
         closedOn = result.closedOn,
