@@ -133,7 +133,7 @@ case class KratiaService(
       auth(request) { (_, _) =>
         for {
           req <- request.as[CreateBallotBoxRequest]
-          req0 = req.copy(data = DecisionData(SimpleDecision(req.data.value).asJson.noSpaces))
+          req0 = req.copy(data = DecisionData(SimpleDecision(req.data.value).asJson))
           res <- v1collectorBL.createBallot(req0)
           ok <- Ok(res)
         } yield ok
@@ -178,11 +178,16 @@ case class KratiaService(
   object github {
 
     def installation(event: InstallationEvent): IO[Unit] =
-      for {
-        accessToken <- gitHubApi.getAccessToken(event.installation)
-        installation <- gitHubApi.storeAccessToken(event.installation, accessToken)
-        _ <- IO { println(installation) }
-      } yield ()
+      if (event.action == "deleted")
+        gitHubApi.removeAccessTokenFromStore(event.installation.id)
+      else if (event.action == "created")
+        for {
+          accessToken <- gitHubApi.getAccessToken(event.installation)
+          installation <- gitHubApi.storeAccessToken(event.installation, accessToken)
+          _ <- IO { println(installation) }
+        } yield ()
+      else
+        IO { println(Console.MAGENTA + "Installation Event: " + event.action + Console.RESET) }
 
     def pullRequest(event: PullRequestEvent): IO[Unit] =
       event.action match {
@@ -196,8 +201,8 @@ case class KratiaService(
       for {
         res <- v1collectorBL.createBallot(CreateBallotBoxRequest(
           validBallot = BinaryProposal.ballot,
-          data = DecisionData(event.asJson.noSpaces),
-          closesOn = 30
+          data = DecisionData(event.asJson),
+          closesOn = 60
         ))
         _ <- IO { println(Console.MAGENTA + res + Console.RESET) }
       } yield ()

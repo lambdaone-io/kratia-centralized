@@ -1,3 +1,5 @@
 package lambdaone.kratia.protocol
 
-case class SimpleDecision(message: String)
+import io.circe.Json
+
+case class SimpleDecision(message: Json)
